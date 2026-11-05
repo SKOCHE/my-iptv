@@ -1,0 +1,3 @@
+IPTV Aggregator v2.2 — ещё не запускался после исправления.
+Следующий шаг: GitHub Actions → IPTV Aggregator — collect, check and publish → Run workflow.
+Важно: найденные кандидаты не считаются рабочими до проверки в Televizo через Ростелеком.

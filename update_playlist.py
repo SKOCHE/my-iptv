@@ -24,6 +24,23 @@ def req(url,timeout=TIMEOUT,headers=None):
         # Bound memory/time: some IPTV servers ignore Range and stream indefinitely.
         body = r.read(4096)
         return r.status, r.headers, body
+def fetch_playlist(url, max_bytes=None):
+    """Download a complete playlist, bounded by max_file_bytes (not 4 KiB)."""
+    limit = int(max_bytes or SET.get("max_file_bytes", 12000000))
+    request = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
+    with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+        chunks = []
+        total = 0
+        while True:
+            chunk = response.read(min(65536, limit + 1 - total))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            total += len(chunk)
+            if total > limit:
+                raise ValueError(f"playlist exceeds {limit} bytes")
+        return b"".join(chunks)
+
 def normalize(s):
     # Keep regional suffixes such as +4: stripping them caused NTV and NTV+4
     # (and MIR / MIR+4) to collapse into the same channel name.
@@ -56,10 +73,25 @@ def names_for(ch):
     return {normalize(ch),*(normalize(x) for x in ALIASES.get(ch,[]))}
 
 def match_channel(name):
-    n=normalize(name)
+    raw=(name or "").strip()
+    raw=re.sub(r"\s+\(\d+\)$", "", raw)  # duplicate stream marker, e.g. "(2)"
+    raw=re.sub(r"\s+\[(?:sd|hd|uhd|4k|720p|1080p|2160p)\]$", "", raw, flags=re.I)
+    n=normalize(raw)
     if not n: return None
     matches=[ch for ch in CHANNELS if n in names_for(ch)]
-    return matches[0] if len(matches)==1 else None
+    if len(matches)==1: return matches[0]
+    # Exact EPG-style aliases for common Russian channel IDs.
+    tvg_map={
+        "rossia1":"Россия 1 HD (+4)", "rossia1-pl4":"Россия 1 HD (+4)",
+        "ntv-pl4":"НТВ (+4)", "mir-pl4":"МИР (+4)", "mir-ru-pl4":"МИР (+4)",
+        "zvezdaplus":"Звезда Плюс", "muztv":"МУЗ ТВ",
+        "russia24":"Россия 24", "rossia-24":"Россия 24",
+        "tvcentr":"ТВЦ", "rentv":"Рен ТВ", "piatnica":"Пятница!",
+        "5kanal-ru":"Пятый канал", "domashny":"Домашний",
+        "tv3-ru":"ТВ3", "sts":"СТС", "zvezda":"Звезда",
+        "perets":"Перец", "pervy":"Первый канал"
+    }
+    return tvg_map.get(n)
 
 def parse_m3u(text,source):
     lines=[x.strip() for x in text.replace("\ufeff","").splitlines()]
@@ -92,9 +124,21 @@ def discover_sources():
     for u in ("https://iptv-org.github.io/iptv/countries/ru.m3u",
               "https://iptv-org.github.io/iptv/languages/rus.m3u"):
         try:
-            _,_,b=req(u); rec=parse_m3u(b.decode("utf-8-sig","replace"),u)
+            b=fetch_playlist(u); rec=parse_m3u(b.decode("utf-8-sig","replace"),u)
             records.extend(rec); stats.append((u,len(rec),"OK"))
         except Exception as e: stats.append((u,0,str(e)[:160]))
+    # Direct, maintained Russian playlists. Fetch full files; never use Wink/Zabava
+    # links from these sources (the user has already seen the territory block screen).
+    for u in (
+        "https://raw.githubusercontent.com/ngrch/iptv/main/ru.m3u",
+        "https://dearbulut.github.io/iptv/playlists/country/ru.m3u",
+    ):
+        try:
+            b=fetch_playlist(u)
+            rec=parse_m3u(b.decode("utf-8-sig","replace"),u)
+            records.extend(rec); stats.append((u,len(rec),"OK"))
+        except Exception as e:
+            stats.append((u,0,str(e)[:160]))
     for source in CFG["github_sources"]:
         repo=source["repo"]
         try:
@@ -108,8 +152,8 @@ def discover_sources():
             for path in files[:int(SET["max_playlist_files_per_repo"])]:
                 raw=f"https://raw.githubusercontent.com/{repo}/{branch}/{urllib.parse.quote(path)}"
                 try:
-                    _,_,b=req(raw)
-                    if len(b)>int(SET["max_file_bytes"]) or b"\x00" in b[:1000]: continue
+                    b=fetch_playlist(raw)
+                    if b"\x00" in b[:1000]: continue
                     txt=b.decode("utf-8-sig","replace")
                     if "#EXTM3U" not in txt[:500]: continue
                     rec=parse_m3u(txt,f"{repo}/{path}")
@@ -145,8 +189,9 @@ def write_m3u(path,items):
         for ch,url,src,status in items:
             f.write(f'#EXTINF:-1 tvg-name="{ch}" group-title="IPTV",{ch} [{status}]\n{url}\n')
 def main():
-    log("=== SKOCHE IPTV Aggregator v2.1 SAFE PUBLISH ===")
-    log("PUBLISH RULE: favorites.m3u contains USER_CONFIRMED links only.")
+    log("=== SKOCHE IPTV Aggregator v2.2 FULL PLAYLIST SCAN ===")
+    log("PUBLISH RULE: favorites.m3u contains only manually confirmed Televizo URLs.")
+    log("DISCOVERY: complete M3U files downloaded up to max_file_bytes; not truncated at 4096 bytes.")
     log("FFMPEG_OK and HTTP-only links are candidates, never auto-published as confirmed channels.")
     records,stats=discover_sources()
     for u,n,s in stats: log(f"SOURCE | {u} | records={n} | {s}")
@@ -160,7 +205,7 @@ def main():
         if host == "zabava-htlive.cdn.ngenix.net" or host.endswith(".zabava.cdn.ngenix.net"):
             rejected_wink += 1
             continue
-        ch=match_channel(rec["name"])
+        ch=match_channel(rec["name"]) or match_channel(rec.get("tvg_id",""))
         if ch:
             candidates.setdefault((ch,rec["url"]),rec)
     log(f"REJECTED WINK/ZABAVA CANDIDATES: {rejected_wink}")
