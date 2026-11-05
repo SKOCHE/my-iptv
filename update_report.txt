@@ -1,5 +1,5 @@
-IPTV v6 diagnostic report
-UTC: 2026-11-05 06:43:35
+IPTV v7 diagnostic report
+UTC: 2026-11-05 07:29:11
 IMPORTANT: decoding confirms only that video can be decoded; it does not verify channel identity.
 Previously reported bad domains excluded: cinerama.uz, linkintel.ru, mcquack.net, thestream.cyou
 
@@ -15,12 +15,12 @@ NO DECODED STREAM | ТНТ4 | id=TNT4.ru | match=canonical exact | candidates=2 
 DECODE OK / IDENTITY UNCONFIRMED | Дом кино | id=Domkino.ru | match=canonical exact | 6 frames decoded; 6 non-flat | http://88.212.15.50/live/test_dom_kino/playlist.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | Смотрим 100% Любовь | id=Smotrim100Lyubov.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://stream.smotrim.ru/hls/fasttv01/playlist_2.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | Звезда Плюс | id=ZvezdaPlus.ru | match=canonical exact | 6 frames decoded; 6 non-flat | http://tvzvezda.bonus-tv.ru/cdn/zvezdaplus/playlist.m3u8
-NO CHANNEL ID | НТВ (+4) | ambiguous/no exact ID: NTV.rs,NTV.ru,Nova.bg
+DECODE OK / IDENTITY UNCONFIRMED | НТВ (+4) | id=NTV.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/7.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | ТНТ | id=TNT.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/23.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | Пятница! | id=Friday.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://vod.tuva.ru/friday/index.m3u8
-NO CHANNEL ID | Пятый канал | ambiguous/no exact ID: Channel5.kg,Channel5.ru,Channel5.sg,Channel5.th,Channel5.ua,Channel5.uk,ZIZTV.kn
+DECODE OK / IDENTITY UNCONFIRMED | Пятый канал | id=Channel5.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/8.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | СТС | id=STS.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/16.m3u8
-NO CHANNEL ID | ТВ3 | ambiguous/no exact ID: TV3.dk,TV3.dz,TV3.ee,TV3.es,TV3.gh,TV3.kh,TV3.lt,TV3.lv,TV3.mn,TV3.my,TV3.no,TV3.ru,TV3.se,TV3.si,TV3.tz,TV3.ws,TV3Plus.dk,TV3Plus.lv,TV3Plus.no,TVChosun3.kr,VirginMediaOne.ie
+DECODE OK / IDENTITY UNCONFIRMED | ТВ3 | id=TV3.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/18.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | Че! | id=Che.ru | match=canonical exact | 6 frames decoded; 6 non-flat | http://176.118.197.101/Che/index.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | Домашний | id=Domashniy.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/17.m3u8
 NO DECODED STREAM | КиноСезон | id=KinoSezon.ru | match=canonical exact | candidates=0 | no eligible stream
@@ -41,9 +41,9 @@ NO CHANNEL ID | Дом кино Премиум HD | ambiguous/no exact ID:
 DECODE OK / IDENTITY UNCONFIRMED | Первый канал | id=ChannelOne.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/4.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | Рен ТВ | id=RENTV.ru | match=canonical exact | 6 frames decoded; 6 non-flat | http://185.23.80.23:8080/REN/index.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | ТВЦ | id=TVCentr.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://tvc-hls.cdnvideo.ru/tvc-res/smil:vd9221.smil/playlist.m3u8
-NO CHANNEL ID | МИР (+4) | ambiguous/no exact ID: Mir.ru,MirNovosibirsk.ru
+DECODE OK / IDENTITY UNCONFIRMED | МИР (+4) | id=Mir.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://tvcdn01.oktv.kz/tv/mir/index.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | Звезда | id=Zvezda.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/21.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | МУЗ ТВ | id=MuzTV.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/20.m3u8
 
-SUMMARY: decoded=17/41; no decoded stream=24
+SUMMARY: decoded=21/41; no decoded stream=20
 Do not treat DECODE OK as visual confirmation of the named channel. Check channel identity in Televizo before relying on it.

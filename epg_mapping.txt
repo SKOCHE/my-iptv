@@ -11,12 +11,12 @@ TV1000 Русское кино | vijuTV1000russkoe.ru | EPG source not listed
 Дом кино | Domkino.ru | EPG source not listed
 Смотрим 100% Любовь | Smotrim100Lyubov.ru | EPG source not listed
 Звезда Плюс | ZvezdaPlus.ru | EPG source not listed
-НТВ (+4) | | no channel ID
+НТВ (+4) | NTV.ru | EPG source not listed
 ТНТ | TNT.ru | EPG source not listed
 Пятница! | Friday.ru | EPG source not listed
-Пятый канал | | no channel ID
+Пятый канал | Channel5.ru | EPG source not listed
 СТС | STS.ru | EPG source not listed
-ТВ3 | | no channel ID
+ТВ3 | TV3.ru | EPG source not listed
 Че! | Che.ru | EPG source not listed
 Домашний | Domashniy.ru | EPG source not listed
 КиноСезон | KinoSezon.ru | guide not found
@@ -37,6 +37,6 @@ TV1000 Русское кино | vijuTV1000russkoe.ru | EPG source not listed
 Первый канал | ChannelOne.ru | EPG source not listed
 Рен ТВ | RENTV.ru | EPG source not listed
 ТВЦ | TVCentr.ru | EPG source not listed
-МИР (+4) | | no channel ID
+МИР (+4) | Mir.ru | EPG source not listed
 Звезда | Zvezda.ru | EPG source not listed
 МУЗ ТВ | MuzTV.ru | EPG source not listed
