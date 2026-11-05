@@ -1,6 +1,6 @@
-PATCH NOTE: This is the previous run report from the uploaded archive. It is retained for reference and is NOT the result of the patched script. Run GitHub Actions to generate a fresh report.
-
-=== SKOCHE IPTV Aggregator v2 ===
+=== SKOCHE IPTV Aggregator v2.1 SAFE PUBLISH ===
+PUBLISH RULE: favorites.m3u contains USER_CONFIRMED links only.
+FFMPEG_OK and HTTP-only links are candidates, never auto-published as confirmed channels.
 SOURCE | https://iptv-org.github.io/iptv/countries/ru.m3u | records=23 | OK
 SOURCE | https://iptv-org.github.io/iptv/languages/rus.m3u | records=22 | OK
 SOURCE | iptv-org/iptv | records=0 | GitHub tree недоступен
@@ -51,8 +51,10 @@ CANDIDATE | Родное кино | USER_CONFIRMED | user-confirmed | confirmed 
 CANDIDATE | Наше новое кино | USER_CONFIRMED | user-confirmed | confirmed by user | https://stream8.cinerama.uz/1051/index.m3u8
 CANDIDATE | Русский бестселлер | USER_CONFIRMED | user-confirmed | confirmed by user | https://stream.mcquack.net/208/index.m3u8
 CANDIDATE | МУЗ ТВ | USER_CONFIRMED | user-confirmed | confirmed by user | https://stream8.cinerama.uz/1200/index.m3u8
-MAIN UPDATED: 19 entries
-HTTP CANDIDATES: 21
+MAIN UPDATED: 11 USER-CONFIRMED entries only
+USER-CONFIRMED MAIN ENTRIES: 11
+AUTOMATIC CANDIDATES FOR MANUAL TEST ONLY: 10
+HTTP CANDIDATES (including user-confirmed): 21
 FFMPEG DECODE TARGETS: 10 (max 3 per channel)
 FFMPEG DECODE OK: 8
 CHANNELS WITH CANDIDATES: 24/41
