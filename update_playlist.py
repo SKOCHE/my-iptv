@@ -1,17 +1,18 @@
 import urllib.request
 import re
 import socket
-import base64
 
-# Полные ссылки зашифрованы в Base64, чтобы GitHub Actions не обрезал их при передаче текстом
-# 1. Ссылка на базу iptv-org (РФ)
-# 2. Ссылка на базу Free-IPTV (СНГ)
-ENCODED_SOURCES = [
-    "aHR0cHM6Ly9pcHR2LW9yZy5naXRodWIuaW8vaXB0di9jb3VudHJpZXMvcnUubTN1",
-    "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0ZyZWUtSVBUVi9JUFRWL21hc3Rlci9wbGF5bGlzdC5tM3U="
+# Собираем ссылки по кусочкам, чтобы избежать автоматического сокращения текста в чате
+PART1 = "https://raw.githubusercontent.com/"
+PART2 = "iptv-org/iptv/master/playlists/countries/ru.m3u"
+PART3 = "Free-IPTV/IPTV/master/playlist.m3u"
+
+SOURCES = [
+    PART1 + PART2,
+    PART1 + PART3
 ]
 
-# Список ваших любимых каналов (42 уникальных канала)
+# Список любимых каналов (42 уникальных канала)
 MY_FAVORITE_CHANNELS = [
     "Шансон ТВ", "Мосфильм. Золотая коллекция", "Победа", "Viasat History",
     "Viasat Nature", "TV1000 Русское кино", "Родное кино", "Киносерия",
@@ -47,10 +48,8 @@ def main():
     collected_channels = {}
     favorites_map = {clean_name(ch): ch for ch in MY_FAVORITE_CHANNELS}
 
-    # Декодируем и сканируем источники
-    for encoded_url in ENCODED_SOURCES:
+    for url in SOURCES:
         try:
-            url = base64.b64decode(encoded_url).decode('utf-8')
             print(f"Сканируем источник: {url}")
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
             with urllib.request.urlopen(req, timeout=15) as response:
@@ -71,9 +70,8 @@ def main():
                             clean_extinf = f'#EXTINF:-1,{beautiful_name}'
                             collected_channels[cleaned_src_name] = (clean_extinf, stream_url.strip(), beautiful_name, is_plus_four)
         except Exception as e:
-            print(f"Ошибка при чтении источника: {e}")
+            print(f"Ошибка при чтении источника {url}: {e}")
 
-    # Проверка ссылок на работоспособность
     working_channels = {}
     print(f"\nНайдено каналов в базах: {len(collected_channels)}. Начинаем проверку...")
     
@@ -96,6 +94,7 @@ def main():
 if __name__ == "__main__":
     socket.setdefaulttimeout(4)
     main()
+
 
 
 
