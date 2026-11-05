@@ -1,58 +1,51 @@
-name: Build verified IPTV playlist
-
+name: IPTV Android TV - strict build
 on:
-  schedule:
-    - cron: "23 2 * * *"
   workflow_dispatch:
-
+  schedule:
+    - cron: "17 3 * * *"
 permissions:
   contents: write
-
 concurrency:
-  group: verified-iptv
+  group: iptv-strict-build
   cancel-in-progress: false
-
 jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install FFmpeg
+      - name: Install FFmpeg and Pillow
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
           python -m pip install --upgrade pip pillow
           ffmpeg -version
-          ffprobe -version
-      - name: Validate required files
+      - name: Validate manifest
         run: |
           test -s channels.json
-          python -c "import json; x=json.load(open('channels.json', encoding='utf-8')); assert len(x)==41, len(x)"
-      - name: Build playlist and decode-test streams
+          python -c "import json; x=json.load(open('channels.json',encoding='utf-8')); assert len(x)==41; assert len({c['name'] for c in x})==41"
+      - name: Build and test streams
         run: python update_playlist.py
-      - name: Upload audit report
+      - name: Upload diagnostics even on failure
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: iptv-update-report
-          path: update_report.txt
+          name: iptv-v5-diagnostics
+          path: |
+            update_report.txt
+            epg_mapping.txt
           if-no-files-found: warn
-          retention-days: 14
-      - name: Commit playlist and report
+          retention-days: 30
+      - name: Commit successful playlist
         if: success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add favorites.m3u update_report.txt
+          git add favorites.m3u update_report.txt epg_mapping.txt
           if ! git diff --cached --quiet; then
-            git commit -m "Refresh verified IPTV playlist"
+            git commit -m "Build strict Android TV IPTV playlist"
             git push
-          else
-            echo "No playlist changes."
           fi
