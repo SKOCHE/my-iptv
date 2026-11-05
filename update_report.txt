@@ -1,5 +1,5 @@
 IPTV v12 expanded-source diagnostic report
-UTC: 2026-11-05 10:13:20
+UTC: 2026-11-05 10:26:38
 IMPORTANT: FFmpeg decode confirms video availability, NOT channel identity.
 Regional target: Barnaul, Moscow time +4.
 NTV +4 and Russia 1 HD +4 are handled as explicit regional candidates.
