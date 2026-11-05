@@ -1,196 +1,190 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Build favorites.m3u from public M3U catalogs without duplicate stream URLs."""
+"""Refresh the user's fixed 41-channel list from public M3U catalogs.
+
+The channel manifest is the source of truth. Every run writes all 41 names.
+A replacement URL is used only when its catalog name matches exactly (after
+normalization), its URL is unique, and an HTTP GET returns an HLS playlist.
+If no verified replacement exists, the previous known URL is retained and
+reported in update_report.txt; the script never silently drops a channel.
+"""
 import concurrent.futures
+import json
 import re
 import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+from urllib.parse import urlsplit
 
+ROOT = Path(__file__).resolve().parent
+MANIFEST = ROOT / "channels.json"
+OUTPUT = ROOT / "favorites.m3u"
+REPORT = ROOT / "update_report.txt"
+UA = "Mozilla/5.0 (compatible; IPTVPlaylistUpdater/2.0)"
+TIMEOUT = 18
+
+# Several independently maintained public catalogs. A source being listed does
+# not imply that every stream in it is authorized, online, or geographically available.
 SOURCES = [
     "https://iptv-org.github.io/iptv/countries/ru.m3u",
     "https://iptv-org.github.io/iptv/languages/rus.m3u",
-    "https://raw.githubusercontent.com/iptv-org/iptv/master/streams/ru.m3u",
-]
-OUTPUT_FILE = Path("favorites.m3u")
-USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130.0 Safari/537.36"
-SOURCE_TIMEOUT = 45
-STREAM_TIMEOUT = 10
-MAX_WORKERS = 16
-MIN_CHANNELS = 8  # Never replace the existing playlist with a tiny/partial result.
-
-# Canonical names retained from the user's 41-channel selection.
-CHANNELS = [
-    "Шансон ТВ", "Мосфильм. Золотая коллекция", "Победа", "Viasat History",
-    "Viasat Nature", "TV1000 Русское кино", "Родное кино", "Киносерия",
-    "Наше новое кино", "Россия 1 HD", "Россия 24", "ТНТ4", "Дом кино",
-    "Смотрим 100% Любовь", "Звезда Плюс", "Первый канал", "НТВ", "Рен ТВ",
-    "ТНТ", "Пятница!", "Пятый канал", "СТС", "ТВЦ", "ТВ3", "МИР",
-    "Че!", "Домашний", "Звезда", "КиноСезон", "Феникс+ Кино",
-    "Глазами туриста", "МУЗ ТВ", "Перец", "Живая планета",
-    "Русский бестселлер", "Русская комедия", "Премиальное HD",
-    "Наше любимое HD", "Наш кинопоказ HD", "Русский иллюзион",
-    "Дом кино Премиум HD",
+    "https://ngrch.github.io/iptv/ru.m3u",
+    "https://raw.githubusercontent.com/substanc1/iptv-russia/main/streams/ru.m3u",
 ]
 
-# Only explicit spelling variants. No fuzzy/substring matching: it can assign a
-# similarly named but different TV channel to a favorite.
 ALIASES = {
     "Шансон ТВ": ["Shanson TV", "Chanson TV"],
-    "Мосфильм. Золотая коллекция": ["Mosfilm Gold Collection", "Mosfilm Zolotaya Kollektsiya"],
-    "Победа": ["Pobeda", "Victory TV"],
+    "Победа": ["Pobeda"],
+    "Viasat History": ["Viasat History HD"],
+    "Viasat Nature": ["Viasat Nature HD"],
     "TV1000 Русское кино": ["TV1000 Russian Kino", "TV1000 Russkoe Kino"],
-    "Родное кино": ["Rodnoe Kino"], "Киносерия": ["Kinoseriya", "Kino Seriya"],
+    "Родное кино": ["Rodnoe Kino"],
+    "Киносерия": ["Kinoseriya", "Kino Seriya"],
     "Наше новое кино": ["Nashe Novoe Kino"],
-    "Россия 1 HD": ["Russia 1 HD", "Rossiya 1 HD", "Россия 1", "Russia 1", "Rossiya 1"],
-    "Россия 24": ["Russia 24", "Rossiya 24"], "ТНТ4": ["TNT4", "TNT 4"],
-    "Дом кино": ["Dom kino", "Dom Kino"],
-    "Смотрим 100% Любовь": ["Smotrim 100% Lyubov", "100% Lyubov"],
-    "Звезда Плюс": ["Zvezda Plus"], "Первый канал": ["Channel One", "1TV", "First Channel", "Perviy Kanal"],
-    "НТВ": ["NTV"], "Рен ТВ": ["REN TV", "Ren TV", "REN-TV"], "ТНТ": ["TNT"],
-    "Пятница!": ["Pyatnitsa", "Friday!"], "Пятый канал": ["Channel 5", "Pyaty Kanal"],
-    "СТС": ["STS", "CTC"], "ТВЦ": ["TV Center", "TV Centre", "TVC", "TV Tsentr"],
-    "ТВ3": ["TV3", "TV-3"], "МИР": ["Mir TV"], "Че!": ["Che TV"],
-    "Домашний": ["Domashniy", "Domashny"], "Звезда": ["Zvezda TV"],
-    "КиноСезон": ["KinoSezon", "Kino Sezon"], "Феникс+ Кино": ["Feniks Kino"],
-    "Глазами туриста": ["Glazami Turista"], "МУЗ ТВ": ["Muz TV", "MUZ-TV", "MuzTV"],
-    "Перец": ["Peretz", "Perets"], "Живая планета": ["Zhivaya Planeta", "Living Planet"],
+    "ТНТ4": ["TNT4", "TNT 4"],
+    "Дом кино": ["Dom Kino"],
+    "Смотрим 100% Любовь": ["100% Lyubov", "Smotrim 100% Lyubov"],
+    "Звезда Плюс": ["Zvezda Plus"],
+    "НТВ (+4)": ["NTV +4", "NTV4", "НТВ 4"],
+    "ТНТ": ["TNT"],
+    "Пятница!": ["Pyatnitsa", "Friday!"],
+    "Пятый канал": ["Channel 5", "Pyaty Kanal"],
+    "СТС": ["STS", "CTC"],
+    "ТВ3": ["TV3", "TV-3"],
+    "Че!": ["Che TV"],
+    "Домашний": ["Domashniy", "Domashny"],
+    "КиноСезон": ["KinoSezon", "Kino Sezon"],
+    "Феникс+ Кино": ["Feniks Kino", "Phoenix Kino"],
+    "Глазами туриста": ["Glazami Turista"],
+    "Перец": ["Perets", "Peretz"],
+    "Живая планета": ["Zhivaya Planeta", "Living Planet"],
     "Русский бестселлер": ["Russkiy Bestseller", "Russian Bestseller"],
     "Русская комедия": ["Russkaya Komediya", "Russian Comedy"],
-    "Премиальное HD": ["Premialnoe HD"], "Наше любимое HD": ["Nashe Lyubimoe HD"],
-    "Наш кинопоказ HD": ["Nash Kinopokaz HD"], "Русский иллюзион": ["Russkiy Illuzion", "Russian Illusion"],
-    "Дом кино Премиум HD": ["Dom Kino Premium HD", "Dom kino Premium"],
+    "Премиальное HD": ["Premialnoe HD"],
+    "Наше любимое HD": ["Nashe Lyubimoe HD"],
+    "Наш кинопоказ HD": ["Nash Kinopokaz HD"],
+    "Русский иллюзион": ["Russkiy Illuzion", "Russian Illusion"],
+    "Мосфильм. Золотая коллекция": ["Mosfilm Gold Collection", "Mosfilm Zolotaya Kollektsiya"],
+    "Россия 1 HD (+4)": ["Russia 1 HD +4", "Rossiya 1 HD +4", "Россия 1 HD"],
+    "Россия 24": ["Russia 24", "Rossiya 24"],
+    "Дом кино Премиум HD": ["Dom Kino Premium HD"],
+    "Первый канал": ["Channel One", "1TV", "First Channel", "Perviy Kanal"],
+    "Рен ТВ": ["REN TV", "Ren TV", "REN-TV"],
+    "ТВЦ": ["TV Center", "TV Centre", "TVC", "TV Tsentr"],
+    "МИР (+4)": ["Mir +4", "МИР 4", "Mir TV +4", "МИР"],
+    "Звезда": ["Zvezda TV"],
+    "МУЗ ТВ": ["Muz TV", "MUZ-TV", "MuzTV"],
 }
-QUALITY = {"hd", "fhd", "uhd", "4k", "hevc", "576p", "576i", "720p", "1080p", "2160p", "sd"}
 
 
-def norm(value):
-    value = value.lower().replace("ё", "е")
-    value = re.sub(r"\([^)]*\)", " ", value)
-    value = re.sub(r"\+4\s*ч?|\+4h|красноярск", " ", value)
-    value = re.sub(r"[^a-zа-я0-9]+", " ", value)
-    return " ".join(w for w in value.split() if w not in QUALITY).strip()
+def norm(s):
+    s = (s or "").lower().replace("ё", "е")
+    s = re.sub(r"\([^)]*\)", " ", s)
+    s = re.sub(r"\+\s*4\s*(?:ч|h)?", " плюс четыре ", s)
+    s = re.sub(r"[^a-zа-я0-9]+", " ", s)
+    return " ".join(s.split())
 
 
-def fetch(url):
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=SOURCE_TIMEOUT) as response:
-        body = response.read()
-    text = body.decode("utf-8-sig", errors="replace")
-    if "#EXTM3U" not in text[:500]:
-        raise ValueError("ответ не является M3U")
+def fetch_text(url):
+    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+        raw = r.read(25 * 1024 * 1024)
+    text = raw.decode("utf-8-sig", errors="replace")
+    if "#EXTM3U" not in text[:1000]:
+        raise ValueError("not an M3U response")
     return text
 
 
-def parse(text, source):
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    records, extinf, name = [], None, ""
-    for line in lines:
+def parse_m3u(text, source):
+    rows, current = [], None
+    for raw in text.splitlines():
+        line = raw.strip()
         if line.startswith("#EXTINF"):
-            extinf = line
             name = line.rsplit(",", 1)[-1].strip() if "," in line else ""
             if not name:
-                match = re.search(r'tvg-name="([^"]+)"', line, re.I)
-                name = match.group(1).strip() if match else ""
-        elif extinf and not line.startswith("#"):
+                m = re.search(r'tvg-name="([^"]+)"', line, re.I)
+                name = m.group(1).strip() if m else ""
+            current = (name, line)
+        elif current and line and not line.startswith("#"):
             if line.startswith(("http://", "https://")):
-                records.append({"name": name, "extinf": extinf, "url": line, "source": source})
-            extinf, name = None, ""
-    return records
+                rows.append({"name": current[0], "extinf": current[1], "url": line, "source": source})
+            current = None
+    return rows
 
 
-def aliases_for(channel):
-    return {norm(x) for x in [channel, *ALIASES.get(channel, [])] if norm(x)}
-
-
-def exact_match(channel, record):
-    candidate = norm(record["name"])
-    return bool(candidate) and candidate in aliases_for(channel)
-
-
-def is_plus4(record):
-    value = (record["name"] + " " + record["extinf"]).lower()
-    return any(token in value for token in ("+4", "+4ч", "+4h", "красноярск"))
-
-
-def probe(url):
-    # GET with a small byte range: many HLS servers reject HEAD requests.
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Range": "bytes=0-1023", "Accept": "*/*"})
+def probe_hls(url):
+    # GET rather than HEAD; validate that the response body resembles HLS.
     try:
-        with urllib.request.urlopen(req, timeout=STREAM_TIMEOUT) as response:
-            data = response.read(1024)
-            content_type = response.headers.get("Content-Type", "").lower()
-            return response.status in (200, 206) and bool(data) and ("mpegurl" in content_type or b"#EXTM3U" in data or url.lower().endswith(".m3u8"))
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+        req = urllib.request.Request(url, headers={"User-Agent": UA, "Range": "bytes=0-4095", "Accept": "*/*"})
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+            body = r.read(4096)
+            ctype = (r.headers.get("Content-Type") or "").lower()
+            return r.status in (200, 206) and bool(body) and (b"#EXTM3U" in body or "mpegurl" in ctype or url.lower().split("?")[0].endswith(".m3u8"))
+    except Exception:
         return False
 
 
 def main():
-    all_records = []
-    for source in SOURCES:
-        print(f"\nЗагружаем: {source}")
+    channels = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    if len(channels) != 41:
+        raise RuntimeError(f"channels.json must contain exactly 41 channels, got {len(channels)}")
+
+    catalog = []
+    source_status = []
+    for src in SOURCES:
         try:
-            records = parse(fetch(source), source)
-            if not records:
-                raise ValueError("в M3U нет записей")
-            all_records.extend(records)
-            print(f"  Записей: {len(records)}")
-        except Exception as error:
-            print(f"  Источник пропущен: {error}")
+            records = parse_m3u(fetch_text(src), src)
+            catalog.extend(records)
+            source_status.append(f"OK {src}: {len(records)} entries")
+        except Exception as exc:
+            source_status.append(f"FAIL {src}: {exc}")
 
-    if not all_records:
-        print("Источники недоступны. Старый favorites.m3u не изменён.")
-        return 2
+    # Build explicit exact-name candidate lists; no substring/fuzzy assignment.
+    candidate_map = {}
+    for ch in channels:
+        names = {norm(ch["name"])} | {norm(a) for a in ALIASES.get(ch["name"], [])}
+        candidates = [r for r in catalog if norm(r["name"]) in names and r["url"].startswith(("http://", "https://"))]
+        # HTTPS first, then stable source/name order.
+        candidates.sort(key=lambda r: (not r["url"].lower().startswith("https://"), r["source"]))
+        candidate_map[ch["name"]] = candidates
 
-    # For each favorite, accept only exact canonical/alias name matches.
-    selected, used_urls = {}, set()
-    for channel in CHANNELS:
-        candidates = [r for r in all_records if exact_match(channel, r)]
-        # Prefer non-regional streams and HTTPS. Never reuse a URL for another channel.
-        candidates.sort(key=lambda r: (is_plus4(r), not r["url"].lower().startswith("https://")))
-        for record in candidates:
-            if record["url"] not in used_urls:
-                selected[channel] = record
-                used_urls.add(record["url"])
+    # Probe each unique candidate URL once.
+    unique_urls = list(dict.fromkeys(r["url"] for rs in candidate_map.values() for r in rs))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as pool:
+        valid = dict(zip(unique_urls, pool.map(probe_hls, unique_urls)))
+
+    chosen, used = {}, set()
+    for ch in channels:
+        name = ch["name"]
+        for rec in candidate_map[name]:
+            if valid.get(rec["url"]) and rec["url"] not in used:
+                chosen[name] = (rec["url"], "FOUND_AND_GET_CHECKED")
+                used.add(rec["url"])
                 break
+        if name not in chosen:
+            fallback = ch.get("fallback_url", "").strip()
+            # Preserve the original user's entry if no verified replacement exists.
+            chosen[name] = (fallback, "KEPT_OLD_URL_UNVERIFIED")
+            if fallback:
+                used.add(fallback)
 
-    print(f"\nУникальных совпадений по названию: {len(selected)} из {len(CHANNELS)}")
-    if len(selected) < MIN_CHANNELS:
-        print(f"Найдено меньше {MIN_CHANNELS}; старый favorites.m3u сохранён.")
-        return 3
-
-    # Probe streams, but do not treat GitHub's network restrictions as definitive
-    # proof that a stream is dead. Keep only candidates whose GET probe succeeds
-    # when enough streams pass; otherwise preserve the old playlist.
-    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        checks = dict(zip(selected, pool.map(probe, [r["url"] for r in selected.values()])))
-    working = [channel for channel in CHANNELS if channel in selected and checks.get(channel)]
-    print(f"GET-проверку прошли: {len(working)}")
-    if len(working) < MIN_CHANNELS:
-        print("Слишком мало проверенных потоков; старый favorites.m3u сохранён.")
-        return 4
-
-    tmp = OUTPUT_FILE.with_suffix(".m3u.tmp")
-    with tmp.open("w", encoding="utf-8", newline="\n") as output:
-        output.write("#EXTM3U\n")
-        for channel in CHANNELS:
-            if channel in selected and checks.get(channel):
-                record = selected[channel]
-                display = channel + (" (+4)" if is_plus4(record) else "")
-                output.write(f"#EXTINF:-1,{display}\n{record['url']}\n")
-    tmp.replace(OUTPUT_FILE)
-    print(f"Готово: записано {len(working)} уникальных каналов.")
+    lines = ["#EXTM3U"]
+    report = ["IPTV update report", "All 41 requested channel names are retained.", ""] + source_status + ["", "Channel results:"]
+    for ch in channels:
+        name = ch["name"]
+        url, status = chosen[name]
+        lines.extend([f"#EXTINF:-1,{name}", url])
+        report.append(f"{status}: {name} -> {url or 'NO URL IN MANIFEST'}")
+    tmp = OUTPUT.with_suffix(".m3u.tmp")
+    tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    tmp.replace(OUTPUT)
+    REPORT.write_text("\n".join(report) + "\n", encoding="utf-8")
+    found = sum(1 for _, status in chosen.values() if status == "FOUND_AND_GET_CHECKED")
+    print(f"Playlist written: {len(channels)} channels; {found} URLs found and GET-checked; {len(channels)-found} old URLs retained.")
+    print(f"See {REPORT.name} for per-channel status.")
     return 0
 
 
 if __name__ == "__main__":
     sys.exit(main())
-
-
-
-
-
-
-
-
