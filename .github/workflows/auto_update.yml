@@ -1,40 +1,59 @@
 name: Build strict Android TV IPTV playlist
+
 on:
   workflow_dispatch:
   schedule:
     - cron: '17 2 * * *'
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
       - 'channels.json'
       - 'update_playlist.py'
       - 'validate_config.py'
       - '.github/workflows/auto_update.yml'
+
+# Do not let two runs build and push to main at the same time.
+# Queued runs wait for the active run instead of cancelling it.
+concurrency:
+  group: iptv-playlist-main
+  cancel-in-progress: false
+
 permissions:
   contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 35
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
           python -m pip install --upgrade pip
           python -m pip install Pillow
+
       - name: Validate 41-channel manifest
         run: python validate_config.py
+
       - name: Build playlist
         env:
           MINIMUM_TO_PUBLISH: '5'
         run: python update_playlist.py
+
       - name: Upload diagnostic files
         if: always()
         uses: actions/upload-artifact@v4
@@ -44,18 +63,24 @@ jobs:
             update_report.txt
             epg_mapping.txt
           if-no-files-found: warn
+
       - name: Commit playlist and reports
         if: success()
         run: |
+          set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add favorites.m3u update_report.txt epg_mapping.txt
-          if ! git diff --cached --quiet; then
-            git commit -m 'Update IPTV playlist and diagnostics'
-            # Rebase on the latest main to avoid non-fast-forward push failures.
-            git fetch origin main
-            git rebase origin/main
-            git push origin HEAD:main
-          else
+
+          if git diff --cached --quiet; then
             echo 'No changes to commit'
+            exit 0
           fi
+
+          git commit -m 'Update IPTV playlist and diagnostics'
+
+          # Incorporate any commits pushed to main while this job was running.
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
+
