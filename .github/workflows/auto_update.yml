@@ -52,7 +52,10 @@ jobs:
           git add favorites.m3u update_report.txt epg_mapping.txt
           if ! git diff --cached --quiet; then
             git commit -m 'Update IPTV playlist and diagnostics'
-            git push
+            # Rebase on the latest main to avoid non-fast-forward push failures.
+            git fetch origin main
+            git rebase origin/main
+            git push origin HEAD:main
           else
             echo 'No changes to commit'
           fi
