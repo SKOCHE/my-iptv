@@ -1,51 +1,58 @@
-name: IPTV Android TV - strict build
+name: Build strict Android TV IPTV playlist
 on:
   workflow_dispatch:
   schedule:
-    - cron: "17 3 * * *"
+    - cron: '17 2 * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'channels.json'
+      - 'update_playlist.py'
+      - 'validate_config.py'
+      - '.github/workflows/auto_update.yml'
 permissions:
   contents: write
-concurrency:
-  group: iptv-strict-build
-  cancel-in-progress: false
 jobs:
   build:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - name: Install FFmpeg and Pillow
+          python-version: '3.12'
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
-          python -m pip install --upgrade pip pillow
-          ffmpeg -version
-      - name: Validate manifest
-        run: |
-          test -s channels.json
-          python -c "import json; x=json.load(open('channels.json',encoding='utf-8')); assert len(x)==41; assert len({c['name'] for c in x})==41"
-      - name: Build and test streams
+          python -m pip install --upgrade pip
+          python -m pip install Pillow
+      - name: Validate 41-channel manifest
+        run: python validate_config.py
+      - name: Build playlist
+        env:
+          MINIMUM_TO_PUBLISH: '5'
         run: python update_playlist.py
-      - name: Upload diagnostics even on failure
+      - name: Upload diagnostic files
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: iptv-v5-diagnostics
+          name: iptv-diagnostics
           path: |
             update_report.txt
             epg_mapping.txt
           if-no-files-found: warn
-          retention-days: 30
-      - name: Commit successful playlist
+      - name: Commit playlist and reports
         if: success()
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add favorites.m3u update_report.txt epg_mapping.txt
           if ! git diff --cached --quiet; then
-            git commit -m "Build strict Android TV IPTV playlist"
+            git commit -m 'Update IPTV playlist and diagnostics'
             git push
+          else
+            echo 'No changes to commit'
           fi
