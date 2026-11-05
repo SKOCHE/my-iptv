@@ -48,9 +48,25 @@
     "Наше любимое HD",
     "Наш кинопоказ HD",
     "Русский иллюзион",
-    "Дом кино Премиум HD"
+    "Дом кино Премиум HD",
+    "Кинохит",
+    "Киномикс",
+    "Кино ТВ",
+    "Киносвидание",
+    "Киносемья",
+    "365 дней",
+    "История",
+    "Наука",
+    "Моя Планета",
+    "Телепутешествия",
+    "RU.TV",
+    "Жара",
+    "Иллюзион+",
+    "Кинокомедия",
+    "Совершенно секретно",
+    "Барнаул 24"
   ],
-  "channel_count": 46,
+  "channel_count": 62,
   "sources": [
     "https://iptv-org.github.io/iptv/countries/ru.m3u",
     "https://iptv-org.github.io/iptv/languages/rus.m3u",
@@ -65,7 +81,10 @@
     "https://raw.githubusercontent.com/swoldier-rus/IP_TV/main/sw.m3u",
     "https://raw.githubusercontent.com/swoldier-rus/IP_TV/main/sw2.m3u",
     "https://raw.githubusercontent.com/smolnp/IPTVru/refs/heads/gh-pages/IPTVstable.m3u8",
-    "https://iptv-org.github.io/iptv/subdivisions/ru-alt.m3u"
+    "https://iptv-org.github.io/iptv/subdivisions/ru-alt.m3u",
+    "https://raw.githubusercontent.com/Dimonovich/TV/Dimonovich/FREE/.m3u",
+    "https://raw.githubusercontent.com/loganettv/playlists/main/mega.m3u",
+    "https://raw.githubusercontent.com/tsavkisi55/iptv-/main/myiptv.m3u"
   ],
   "manual_confirmed_streams": [],
   "playlist_url": "https://skoche.github.io/my-iptv/favorites.m3u",
@@ -74,6 +93,8 @@
     "Additional entertainment channels are retained from the user's original target list.",
     "Regional +4 naming is an alias preference, not proof that every source provides a true Altai time-shift feed.",
     "All candidate streams must pass the project's speed/ad filtering; a successful HTTP response alone does not guarantee correct video playback.",
-    "Rostelecom playback must be verified in Televizo from the user's network."
+    "Rostelecom playback must be verified in Televizo from the user's network.",
+    "Added 16 requested Russian-language target channels; public playlist evidence found for 15 names, while Barnaul 24 did not have a confirmed direct stream in the checked public M3U sources.",
+    "Candidate stream presence is not proof of live playback; the Guovin engine must test URLs. Barnaul 24 remains in the target catalog for future source discovery."
   ]
 }
