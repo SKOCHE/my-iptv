@@ -102,15 +102,22 @@ jobs:
         id: generate
         env:
           PAGES_BASE_URL: ${{ steps.pages.outputs.base_url }}
-          SPEED_TEST_MODE: full
-          OPEN_STREAM_SCREENSHOT: "True"
-          STREAM_SCREENSHOT_TIMEOUT: "8"
-          STREAM_SCREENSHOT_WIDTH: "640"
-          OUTPUT_URLS_LIMIT: "10"
         run: |
           pages_base_url="${PAGES_BASE_URL%/}"
           echo "pages_base_url=$pages_base_url" >> "$GITHUB_OUTPUT"
           IPTV_API_ARTIFACT_BASE_URL="$pages_base_url" pipenv run dev
+
+      - name: Upload stream screenshots and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stream-diagnostics-${{ github.run_id }}
+          path: |
+            output/screenshots/**
+            output/data/**
+            output/log/**
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Create release metadata
         id: release
@@ -146,15 +153,6 @@ jobs:
         uses: actions/upload-pages-artifact@v4
         with:
           path: pages-site
-
-      - name: Upload stream screenshots
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: stream-screenshots-${{ github.run_id }}
-          path: output/screenshots/
-          if-no-files-found: warn
-          retention-days: 7
 
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
@@ -295,14 +293,6 @@ jobs:
             --title "$release_title" \
             --notes "$release_notes" \
             --prerelease
-
-          find release-assets -maxdepth 1 -type f -printf '%f\n' | sort > /tmp/local-assets.txt
-          gh release view "$RELEASE_TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --json assets \
-            --jq '.assets[].name' | sort > /tmp/remote-assets.txt
-          diff -u /tmp/local-assets.txt /tmp/remote-assets.txt
-
 
           find release-assets -maxdepth 1 -type f -printf '%f\n' | sort > /tmp/local-assets.txt
           gh release view "$RELEASE_TAG" \
