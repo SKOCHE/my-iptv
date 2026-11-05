@@ -48,4 +48,19 @@ TV1000 Русское кино,vijutv1000русскоекино,tv1000russiankin
 Карусель,karusel,карусельтв
 ОТР,otr,общественноетелевидениероссии
 Спас,спаств,spas,spastv
-
+Кинохит,kinohit,кинохит
+Киномикс,kinomix,киномикс
+Кино ТВ,kinotv,кинотв
+Киносвидание,kinosvidanie,киносвидание
+Киносемья,kinosemya,киносемья
+365 дней,365дней,365day,365days
+История,istoriya,история
+Наука,nauka,наука,nauka20
+Моя Планета,moyaplaneta,мояпланета
+Телепутешествия,teleputeshestviya,телепутешествия
+RU.TV,rutv,ru.tv,рутв
+Жара,zhara,жара
+Иллюзион+,illyuzion+,иллюзион+,illuzionplus
+Кинокомедия,kinokomediya,кинокомедия
+Совершенно секретно,sovershennosekretno,совершенносекретно,topsecret
+Барнаул 24,barnaul24,барнаул24

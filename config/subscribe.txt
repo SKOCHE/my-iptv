@@ -16,3 +16,5 @@ https://raw.githubusercontent.com/swoldier-rus/IP_TV/main/sw2.m3u
 https://raw.githubusercontent.com/smolnp/IPTVru/refs/heads/gh-pages/IPTVstable.m3u8
 https://iptv-org.github.io/iptv/subdivisions/ru-alt.m3u
 https://raw.githubusercontent.com/Dimonovich/TV/Dimonovich/FREE/.m3u
+https://raw.githubusercontent.com/loganettv/playlists/main/mega.m3u
+https://raw.githubusercontent.com/tsavkisi55/iptv-/main/myiptv.m3u
