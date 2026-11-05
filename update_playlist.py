@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Build an IPTV playlist from iptv-org with conservative matching and audit.
+"""Build IPTV playlist with explicit Barnaul (+4) regional overrides.
 A successful FFmpeg decode is NOT proof of channel identity.
 """
 import concurrent.futures, json, os, re, shutil, subprocess, sys, time, io
@@ -14,8 +14,16 @@ OUT = ROOT / 'favorites.m3u'
 REPORT = ROOT / 'update_report.txt'
 EPG = ROOT / 'epg_mapping.txt'
 API = 'https://iptv-org.github.io/api'
-UA = 'Mozilla/5.0 (compatible; SKOCHE-IPTV-check/6.0)'
+UA = 'Mozilla/5.0 (compatible; SKOCHE-IPTV-check/9.0)'
 BLOCKED = {'cinerama.uz', 'mcquack.net', 'linkintel.ru', 'thestream.cyou'}
+
+# Regional feeds explicitly identified as +4 relative to Moscow (Barnaul time).
+# These are candidates from published IPTV stream catalogs; FFmpeg tests availability,
+# but visual inspection in Televizo is still required to confirm channel identity.
+BARNAUL_PLUS4 = {
+    'НТВ (+4)': 'https://cdn.ntv.ru/ntv4/playlist.m3u8',
+    'Россия 1 HD (+4)': 'https://vgtrkregion-reg.cdnvideo.ru/vgtrk/4/russia1-hd/index.m3u8',
+}
 
 def norm(s):
     s = (s or '').casefold().replace('ё', 'е')
@@ -36,11 +44,9 @@ def is_blocked(url):
     return any(host == d or host.endswith('.' + d) for d in BLOCKED)
 
 def resolve_channel(item, channels, name_index):
-    # Explicit reviewed IDs take precedence over ambiguous short names (TNT, TV3, etc.).
     explicit = item.get('channel_id')
     if explicit and any(c.get('id') == explicit for c in channels):
         return explicit, 'explicit channel_id'
-    # Canonical exact match wins. Alias matches are considered only if unique.
     canonical = norm(item['name'])
     direct = name_index.get(canonical, set())
     if len(direct) == 1:
@@ -108,12 +114,16 @@ def main():
     for c in channels:
         for n in [c.get('name', '')] + (c.get('alt_names') or []):
             if n: name_index.setdefault(norm(n), set()).add(c['id'])
-    report = ['IPTV v7 diagnostic report', 'UTC: ' + time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()),
+
+    report = ['IPTV v9 diagnostic report', 'UTC: ' + time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()),
               'IMPORTANT: decoding confirms only that video can be decoded; it does not verify channel identity.',
+              'Barnaul target: Moscow time +4. NTV +4 and Russia 1 +4 use explicit regional URLs.',
               'Previously reported bad domains excluded: ' + ', '.join(sorted(BLOCKED)), '']
     epg_lines = ['# name | tvg-id | XMLTV source URLs (if listed)']
     output = ['#EXTM3U']
-    used = set(); passed = 0
+    used = set()
+    passed = 0
+
     for item in wanted:
         name = item['name']
         cid, match = resolve_channel(item, channels, name_index)
@@ -123,51 +133,65 @@ def main():
             continue
         ch = byid[cid]
         candidates = []
-        for st in streams:
-            if st.get('channel') != cid: continue
-            url = (st.get('url') or '').strip()
-            if not url.startswith(('https://','http://')) or url in used or is_blocked(url): continue
-            labels = set(st.get('labels') or [])
-            if labels & {'Geo-blocked','Not 24/7'}: continue
-            feed = feedmap.get((cid, st.get('feed')), {})
-            langs = set(feed.get('languages') or [])
-            areas = set(feed.get('broadcast_area') or [])
-            # Do not discard a Russian channel solely because the feed lacks a RU area tag.
-            # Prefer Russian-language and RU-area feeds, but allow unlabelled feeds for RU channels.
-            if langs and 'rus' not in langs and ch.get('country') != 'RU': continue
-            score = (8 if 'rus' in langs else 0) + (5 if {'c/RU','r/RU'} & areas else 0)
-            score += 2 if feed.get('is_main') else 0
-            score += 1 if url.startswith('https://') else 0
-            candidates.append((score, st, feed))
+
+        # For these two regional entries, do not fall back to Moscow/base feeds.
+        # Test only the explicitly designated +4 URL.
+        if name in BARNAUL_PLUS4:
+            regional_url = BARNAUL_PLUS4[name]
+            if regional_url not in used:
+                candidates = [(100, {'url': regional_url}, {})]
+            else:
+                report.append(f'DUPLICATE REGIONAL URL | {name} | {regional_url}')
+                continue
+        else:
+            for st in streams:
+                if st.get('channel') != cid: continue
+                url = (st.get('url') or '').strip()
+                if not url.startswith(('https://','http://')) or url in used or is_blocked(url): continue
+                labels = set(st.get('labels') or [])
+                if labels & {'Geo-blocked','Not 24/7'}: continue
+                feed = feedmap.get((cid, st.get('feed')), {})
+                langs = set(feed.get('languages') or [])
+                areas = set(feed.get('broadcast_area') or [])
+                if langs and 'rus' not in langs and ch.get('country') != 'RU': continue
+                score = (8 if 'rus' in langs else 0) + (5 if {'c/RU','r/RU'} & areas else 0)
+                score += 2 if feed.get('is_main') else 0
+                score += 1 if url.startswith('https://') else 0
+                candidates.append((score, st, feed))
+
         candidates.sort(key=lambda x: x[0], reverse=True)
         reasons = []
         accepted = None
         for _, st, feed in candidates[:12]:
             ok, reason = decode_test(st)
             if ok:
-                accepted = (st, feed, reason); break
+                accepted = (st, feed, reason)
+                break
             reasons.append(reason)
         if not accepted:
             report.append(f'NO DECODED STREAM | {name} | id={cid} | match={match} | candidates={len(candidates)} | {"; ".join(reasons[:4]) or "no eligible stream"}')
             epg_lines.append(f'{name} | {cid} | guide not found')
             continue
+
         st, feed, reason = accepted
-        url = st['url']; used.add(url); passed += 1
+        url = st['url']
+        used.add(url)
+        passed += 1
         output.append(f'#EXTINF:-1 tvg-id="{cid}" tvg-name="{name}" group-title="IPTV",{name}')
-        if st.get('referrer'): output.append('#EXTVLCOPT:http-referrer=' + st['referrer'])
-        if st.get('user_agent'): output.append('#EXTVLCOPT:http-user-agent=' + st['user_agent'])
         output.append(url)
-        report.append(f'DECODE OK / IDENTITY UNCONFIRMED | {name} | id={cid} | match={match} | {reason} | {url}')
+        status = 'REGIONAL +4 CANDIDATE / IDENTITY UNCONFIRMED' if name in BARNAUL_PLUS4 else 'DECODE OK / IDENTITY UNCONFIRMED'
+        report.append(f'{status} | {name} | id={cid} | match={match} | {reason} | {url}')
         guide_urls = []
         for g in guides:
             if g.get('channel') == cid and (not g.get('feed') or g.get('feed') == feed.get('id')):
                 guide_urls += [s['url'] for s in (g.get('sources') or []) if s.get('url')]
         epg_lines.append(f'{name} | {cid} | ' + ('; '.join(dict.fromkeys(guide_urls)) or 'EPG source not listed'))
+
     report += ['', f'SUMMARY: decoded={passed}/41; no decoded stream={41-passed}',
-               'Do not treat DECODE OK as visual confirmation of the named channel. Check channel identity in Televizo before relying on it.']
+               'Regional +4 sources are candidates. Confirm the broadcast time/content visually in Televizo.',
+               'Do not treat DECODE OK as visual confirmation of the named channel.']
     REPORT.write_text('\n'.join(report)+'\n', encoding='utf-8')
     EPG.write_text('\n'.join(epg_lines)+'\n', encoding='utf-8')
-    # Guard against accidentally publishing a tiny playlist after a source/API outage.
     minimum = int(os.environ.get('MINIMUM_TO_PUBLISH', '5'))
     if passed < minimum:
         raise RuntimeError(f'Only {passed} channels decoded (< minimum {minimum}); existing favorites.m3u was NOT changed')
@@ -179,4 +203,6 @@ def main():
 if __name__ == '__main__':
     try: main()
     except Exception as e:
-        print('FATAL:', e, file=sys.stderr); sys.exit(1)
+        print('FATAL:', e, file=sys.stderr)
+        sys.exit(1)
+
