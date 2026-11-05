@@ -82,7 +82,8 @@
     "aliases": [
       "NTV +4",
       "NTV4"
-    ]
+    ],
+    "channel_id": "NTV.ru"
   },
   {
     "name": "ТНТ",
@@ -102,7 +103,8 @@
     "aliases": [
       "Channel 5",
       "Pyaty Kanal"
-    ]
+    ],
+    "channel_id": "Channel5.ru"
   },
   {
     "name": "СТС",
@@ -116,7 +118,8 @@
     "aliases": [
       "TV3",
       "TV-3"
-    ]
+    ],
+    "channel_id": "TV3.ru"
   },
   {
     "name": "Че!",
@@ -259,7 +262,8 @@
     "aliases": [
       "Mir +4",
       "Mir TV +4"
-    ]
+    ],
+    "channel_id": "Mir.ru"
   },
   {
     "name": "Звезда",

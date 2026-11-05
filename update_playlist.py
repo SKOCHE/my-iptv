@@ -36,6 +36,10 @@ def is_blocked(url):
     return any(host == d or host.endswith('.' + d) for d in BLOCKED)
 
 def resolve_channel(item, channels, name_index):
+    # Explicit reviewed IDs take precedence over ambiguous short names (TNT, TV3, etc.).
+    explicit = item.get('channel_id')
+    if explicit and any(c.get('id') == explicit for c in channels):
+        return explicit, 'explicit channel_id'
     # Canonical exact match wins. Alias matches are considered only if unique.
     canonical = norm(item['name'])
     direct = name_index.get(canonical, set())
@@ -104,7 +108,7 @@ def main():
     for c in channels:
         for n in [c.get('name', '')] + (c.get('alt_names') or []):
             if n: name_index.setdefault(norm(n), set()).add(c['id'])
-    report = ['IPTV v6 diagnostic report', 'UTC: ' + time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()),
+    report = ['IPTV v7 diagnostic report', 'UTC: ' + time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()),
               'IMPORTANT: decoding confirms only that video can be decoded; it does not verify channel identity.',
               'Previously reported bad domains excluded: ' + ', '.join(sorted(BLOCKED)), '']
     epg_lines = ['# name | tvg-id | XMLTV source URLs (if listed)']
