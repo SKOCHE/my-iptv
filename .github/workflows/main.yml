@@ -81,8 +81,16 @@ jobs:
           update-environment: true
           cache: pipenv
 
-      - name: Install FFmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Check or install FFmpeg
+        timeout-minutes: 5
+        run: |
+          if command -v ffmpeg >/dev/null 2>&1; then
+            echo "FFmpeg is already installed on this GitHub runner."
+          else
+            echo "FFmpeg is missing; installing only the required package."
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          fi
+          ffmpeg -version | head -n 2
 
       - name: Install dependencies
         run: |
