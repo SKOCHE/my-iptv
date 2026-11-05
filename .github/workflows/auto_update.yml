@@ -1,4 +1,3 @@
-
 name: Build verified IPTV playlist
 
 on:
@@ -9,39 +8,43 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: verified-iptv
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Install Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
       - name: Install FFmpeg
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
+          ffmpeg -version
           ffprobe -version
-
-      - name: Build playlist
-        run: python update_playlist.py
-
-      - name: Show report
-        if: always()
+      - name: Validate required files
         run: |
-          if [ -f update_report.txt ]; then
-            cat update_report.txt
-          else
-            echo "ОТЧЁТ НЕ СОЗДАН"
-          fi
-
+          test -s channels.json
+          python -c "import json; x=json.load(open('channels.json', encoding='utf-8')); assert len(x)==41, len(x)"
+      - name: Build playlist and decode-test streams
+        run: python update_playlist.py
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iptv-update-report
+          path: update_report.txt
+          if-no-files-found: warn
+          retention-days: 14
       - name: Commit playlist and report
+        if: success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -49,6 +52,8 @@ jobs:
           if ! git diff --cached --quiet; then
             git commit -m "Refresh verified IPTV playlist"
             git push
+          else
+            echo "No playlist changes."
           fi
 
 
