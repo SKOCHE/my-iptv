@@ -1,115 +1,96 @@
-import os
-import tempfile
+import re
+import threading
+from typing import Callable
 
-import utils.constants as constants
-from utils.config import config, resource_path
-
-
-def _read_lines(path: str) -> tuple[str, list[str]]:
-    target = resource_path(path, persistent=True)
-    if os.path.exists(target):
-        with open(target, "r", encoding="utf-8") as file:
-            return target, file.read().splitlines()
-    return target, []
+import requests
 
 
-def _write_lines(target: str, lines: list[str]) -> None:
-    os.makedirs(os.path.dirname(target) or ".", exist_ok=True)
-    with tempfile.NamedTemporaryFile(
-            mode="w", encoding="utf-8", delete=False,
-            dir=os.path.dirname(target) or ".", prefix=os.path.basename(target) + ".tmp."
-    ) as file:
-        file.write("\n".join(lines).rstrip() + "\n")
-        temporary = file.name
-    os.replace(temporary, target)
+REPOSITORY_URL = "https://github.com/Guovin/iptv-api"
+LATEST_RELEASE_API = "https://api.github.com/repos/Guovin/iptv-api/releases/latest"
+VERSION_CHECK_INTERVAL_SECONDS = 6 * 60 * 60
 
 
-def _append_unique(path: str, value: str) -> bool:
-    target, lines = _read_lines(path)
-    normalized = value.strip()
-    if normalized in {line.strip() for line in lines}:
-        return False
-    lines.append(normalized)
-    _write_lines(target, lines)
-    return True
+def version_tuple(value: str) -> tuple[int, ...]:
+    numbers = [int(part) for part in re.findall(r"\d+", value or "")]
+    return tuple(numbers or [0])
 
 
-def add_to_whitelist(channel_name: str, url: str) -> bool:
-    target, lines = _read_lines(constants.whitelist_path)
-    value = f"{channel_name},{url}".strip()
-    if value in {line.strip() for line in lines}:
-        return False
-    insert_at = next(
-        (index for index, line in enumerate(lines) if line.strip().upper() == "[KEYWORDS]"),
-        len(lines),
+def build_revision(value: object) -> int:
+    text = str(value or "").strip()
+    return int(text) if text.isdigit() else 0
+
+
+def parse_release(
+    data: dict,
+    current_version: str,
+    current_revision: object = 0,
+    latest_revision: object = 0,
+) -> dict:
+    latest = str(data.get("tag_name") or data.get("name") or "").lstrip("v")
+    current_build = build_revision(current_revision)
+    latest_build = build_revision(latest_revision)
+    version_comparison = version_tuple(latest) > version_tuple(current_version)
+    revision_comparison = (
+        version_tuple(latest) == version_tuple(current_version)
+        and latest_build > current_build
     )
-    while insert_at > 0 and not lines[insert_at - 1].strip():
-        insert_at -= 1
-    lines.insert(insert_at, value)
-    _write_lines(target, lines)
-    return True
-
-
-def add_to_blacklist(url: str) -> bool:
-    return _append_unique(constants.blacklist_path, url)
-
-
-def add_channel(category: str, channel_name: str) -> bool:
-    target, lines = _read_lines(config.source_file)
-    name = channel_name.strip()
-    group = category.strip()
-    if not name or any(line.strip() == name for line in lines if not line.strip().endswith(",#genre#")):
-        return False
-    header = f"{group},#genre#"
-    header_index = next((index for index, line in enumerate(lines) if line.strip() == header), -1)
-    if header_index < 0:
-        if lines and lines[-1].strip():
-            lines.append("")
-        lines.extend([header, name])
-    else:
-        insert_at = header_index + 1
-        while insert_at < len(lines) and not lines[insert_at].strip().endswith(",#genre#"):
-            insert_at += 1
-        while insert_at > header_index + 1 and not lines[insert_at - 1].strip():
-            insert_at -= 1
-        lines.insert(insert_at, name)
-    _write_lines(target, lines)
-    return True
-
-
-def delete_channels(channel_names: list[str]) -> int:
-    target, lines = _read_lines(config.source_file)
-    names = {name.strip() for name in channel_names if name.strip()}
-    filtered = [
-        line for line in lines
-        if line.strip().endswith(",#genre#") or line.strip() not in names
-    ]
-    removed = len(lines) - len(filtered)
-    if removed:
-        _write_lines(target, filtered)
-    return removed
-
-
-def add_manual_channel_result(channel_name: str, url: str) -> bool:
-    return _append_unique(constants.local_path, f"{channel_name.strip()},{url.strip()}")
-
-
-def delete_manual_channel_results(channel_name: str, urls: list[str]) -> int:
-    return delete_manual_channel_results_many({channel_name: urls})
-
-
-def delete_manual_channel_results_many(channel_urls: dict[str, list[str]]) -> int:
-    target, lines = _read_lines(constants.local_path)
-    values = {
-        f"{channel_name.strip()},{url.strip()}"
-        for channel_name, urls in channel_urls.items()
-        for url in urls
-        if channel_name.strip() and url.strip()
+    return {
+        "current": current_version,
+        "latest": latest,
+        "current_revision": current_build,
+        "latest_revision": latest_build,
+        "newer": version_comparison or revision_comparison,
+        "release_url": data.get("html_url") or REPOSITORY_URL + "/releases/latest",
+        "assets": data.get("assets") or [],
     }
-    if not values:
-        return 0
-    filtered = [line for line in lines if line.strip() not in values]
-    removed = len(lines) - len(filtered)
-    if removed:
-        _write_lines(target, filtered)
-    return removed
+
+
+def check_latest_release(current_version: str, timeout: float = 4.0) -> dict:
+    response = requests.get(
+        LATEST_RELEASE_API,
+        headers={"User-Agent": "IPTV-API"},
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    return parse_release(response.json(), current_version)
+
+
+def log_new_version_if_available(current_version: str, checker: Callable = check_latest_release, reporter=None):
+    try:
+        result = checker(current_version)
+    except Exception:
+        return None
+    if result.get("newer"):
+        from utils.i18n import t
+        message = t("msg.new_version_available_log").format(
+            current=result.get("current") or current_version,
+            latest=result.get("latest") or "",
+            url=result.get("release_url") or REPOSITORY_URL + "/releases/latest",
+        )
+        if reporter:
+            reporter.info(
+                "version.available",
+                message,
+                current=result.get("current") or current_version,
+                latest=result.get("latest") or "",
+                url=result.get("release_url") or REPOSITORY_URL + "/releases/latest",
+            )
+        else:
+            print(message, flush=True)
+    return result
+
+
+def start_version_log_monitor(
+        current_version: str,
+        interval: float = VERSION_CHECK_INTERVAL_SECONDS,
+        checker: Callable = check_latest_release,
+        reporter=None,
+) -> threading.Event:
+    stop_event = threading.Event()
+
+    def monitor():
+        while not stop_event.wait(interval):
+            log_new_version_if_available(current_version, checker=checker, reporter=reporter)
+
+    threading.Thread(target=monitor, name="version-check-monitor", daemon=True).start()
+    return stop_event

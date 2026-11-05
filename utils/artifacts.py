@@ -1,83 +1,64 @@
+from __future__ import annotations
+
+import json
 import os
-import re
+import threading
+from datetime import datetime
+from typing import Any, Callable
 
-import utils.constants as constants
-from utils.tools import get_real_path, resource_path, format_name
+from utils.i18n import t
+from utils.reporting import sanitize_fields
 
 
-class Alias:
-    def __init__(self):
-        self.reload()
+class ArtifactWriter:
+    """Write a latest-run human-readable artifact and a JSONL companion."""
 
-    def reload(self):
-        """Reload the current alias file, discarding previous exact and regex mappings."""
-        self.primary_to_aliases: dict[str, set[str]] = {}
-        self.alias_to_primary: dict[str, str] = {}
-        self.pattern_to_primary: list[tuple[re.Pattern, str]] = []
+    def __init__(
+        self,
+        text_path: str,
+        jsonl_path: str,
+        formatter: Callable[[dict[str, Any]], str],
+        *,
+        limit: int = 10000,
+    ):
+        self.text_path = text_path
+        self.jsonl_path = jsonl_path
+        self.formatter = formatter
+        self.limit = max(0, int(limit))
+        self.count = 0
+        self.dropped = 0
+        self._lock = threading.RLock()
+        for path in (text_path, jsonl_path):
+            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        self._text = open(text_path, "w", encoding="utf-8")
+        self._jsonl = open(jsonl_path, "w", encoding="utf-8")
 
-        real_path = get_real_path(resource_path(constants.alias_path))
-        if os.path.exists(real_path):
-            with open(real_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    if line.strip() and not line.startswith("#") and "," in line:
-                        parts = [p.strip() for p in line.split(",")]
-                        primary = parts[0]
-                        aliases = set(parts[1:])
-                        aliases.add(format_name(primary))
-                        self.primary_to_aliases[primary] = aliases
-                        for alias in aliases:
-                            self.alias_to_primary[alias] = primary
-                            if alias.startswith("re:"):
-                                raw_pattern = alias[3:]
-                                try:
-                                    pattern = re.compile(raw_pattern)
-                                    if (pattern, primary) not in self.pattern_to_primary:
-                                        self.pattern_to_primary.append((pattern, primary))
-                                except re.error:
-                                    pass
-                        self.alias_to_primary[primary] = primary
+    def write(self, record: dict[str, Any]):
+        with self._lock:
+            if self.count >= self.limit:
+                self.dropped += 1
+                return
+            payload = sanitize_fields({
+                "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
+                **record,
+            })
+            self._text.write(self.formatter(payload).rstrip("\n") + "\n")
+            self._jsonl.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
+            self.count += 1
 
-    def get(self, name: str):
-        """
-        Get the alias by name
-        """
-        return self.primary_to_aliases.get(name, set())
-
-    def get_primary(self, name: str):
-        """
-        Get the primary name by alias
-        """
-        primary_name = self.alias_to_primary.get(name, None) or self.get_primary_by_pattern(name)
-        if primary_name is None:
-            alias_format_name = format_name(name)
-            primary_name = self.alias_to_primary.get(alias_format_name, name)
-        return primary_name
-
-    def get_primary_by_pattern(self, name: str):
-        """
-        Get the primary name by pattern match
-        """
-        for pattern, primary in self.pattern_to_primary:
-            if pattern.search(name):
-                return primary
-        return None
-
-    def set(self, name: str, aliases: set[str]):
-        """
-        Set the aliases by name
-        """
-        if name in self.primary_to_aliases:
-            for alias in self.primary_to_aliases[name]:
-                self.alias_to_primary.pop(alias, None)
-        self.primary_to_aliases[name] = set(aliases)
-        for alias in aliases:
-            self.alias_to_primary[alias] = name
-            if alias.startswith("re:"):
-                raw_pattern = alias[3:]
-                try:
-                    pattern = re.compile(raw_pattern)
-                    if (pattern, name) not in self.pattern_to_primary:
-                        self.pattern_to_primary.append((pattern, name))
-                except re.error:
-                    pass
-        self.alias_to_primary[name] = name
+    def close(self):
+        with self._lock:
+            if self.dropped:
+                notice = {
+                    "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
+                    "event": "artifact.truncated",
+                    "dropped": self.dropped,
+                    "limit": self.limit,
+                }
+                self._text.write(
+                    t("log.artifact_truncated").format(dropped=self.dropped, limit=self.limit) + "\n"
+                )
+                self._jsonl.write(json.dumps(notice, ensure_ascii=False) + "\n")
+            for file in (self._text, self._jsonl):
+                file.flush()
+                file.close()
