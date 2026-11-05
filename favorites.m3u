@@ -1,16 +1,30 @@
 #EXTM3U
 #EXTINF:-1 tvg-id="ShansonTV.ru" tvg-name="Шансон ТВ" group-title="IPTV",Шансон ТВ
 http://catchup.videoline.ru/shanson/index.m3u8
+#EXTINF:-1 tvg-id="Pobeda.ru" tvg-name="Победа" group-title="Нет потока",Победа [НЕТ ПОТОКА]
+https://example.invalid/iptv-unavailable/channel-1.m3u8
+#EXTINF:-1 tvg-id="" tvg-name="Viasat History" group-title="Нет потока",Viasat History [НЕТ ПОТОКА]
+https://example.invalid/iptv-unavailable/viasat-history.m3u8
+#EXTINF:-1 tvg-id="" tvg-name="Viasat Nature" group-title="Нет потока",Viasat Nature [НЕТ ПОТОКА]
+https://example.invalid/iptv-unavailable/viasat-nature.m3u8
 #EXTINF:-1 tvg-id="vijuTV1000russkoe.ru" tvg-name="TV1000 Русское кино" group-title="IPTV",TV1000 Русское кино
 http://46.53.200.153:7777/play/a01g/index.m3u8
+#EXTINF:-1 tvg-id="RodnoeKino.ru" tvg-name="Родное кино" group-title="Нет потока",Родное кино [НЕТ ПОТОКА]
+https://example.invalid/iptv-unavailable/channel-4.m3u8
 #EXTINF:-1 tvg-id="Kinoseriya.ru" tvg-name="Киносерия" group-title="IPTV",Киносерия
 https://fs.uplink.kz/kinoseria/mono.m3u8?token=onlinetv
+#EXTINF:-1 tvg-id="NasheNovoeKino.ru" tvg-name="Наше новое кино" group-title="Нет потока",Наше новое кино [НЕТ ПОТОКА]
+https://example.invalid/iptv-unavailable/channel-5.m3u8
+#EXTINF:-1 tvg-id="TNT4.ru" tvg-name="ТНТ4" group-title="Нет потока",ТНТ4 [НЕТ ПОТОКА]
+https://example.invalid/iptv-unavailable/4.m3u8
 #EXTINF:-1 tvg-id="Domkino.ru" tvg-name="Дом кино" group-title="IPTV",Дом кино
 http://88.212.15.50/live/test_dom_kino/playlist.m3u8
 #EXTINF:-1 tvg-id="Smotrim100Lyubov.ru" tvg-name="Смотрим 100% Любовь" group-title="IPTV",Смотрим 100% Любовь
 https://stream.smotrim.ru/hls/fasttv01/playlist_2.m3u8
 #EXTINF:-1 tvg-id="ZvezdaPlus.ru" tvg-name="Звезда Плюс" group-title="IPTV",Звезда Плюс
 http://tvzvezda.bonus-tv.ru/cdn/zvezdaplus/playlist.m3u8
+#EXTINF:-1 tvg-id="NTV.ru" tvg-name="НТВ (+4)" group-title="Нет потока",НТВ (+4) [НЕТ ПОТОКА]
+https://example.invalid/iptv-unavailable/4.m3u8
 #EXTINF:-1 tvg-id="TNT.ru" tvg-name="ТНТ" group-title="IPTV",ТНТ
 https://streaming.televizor-24-tochka.ru/live/23.m3u8
 #EXTINF:-1 tvg-id="Friday.ru" tvg-name="Пятница!" group-title="IPTV",Пятница!
@@ -25,16 +39,44 @@ https://streaming.televizor-24-tochka.ru/live/18.m3u8
 http://176.118.197.101/Che/index.m3u8
 #EXTINF:-1 tvg-id="Domashniy.ru" tvg-name="Домашний" group-title="IPTV",Домашний
 https://streaming.televizor-24-tochka.ru/live/17.m3u8
+#EXTINF:-1 tvg-id="KinoSezon.ru" tvg-name="КиноСезон" group-title="Нет потока",КиноСезон [НЕТ ПОТОКА]
+https://example.invalid/iptv-unavailable/channel-8.m3u8
+#EXTINF:-1 tvg-id="FeniksplusKino.ru" tvg-name="Феникс+ Кино" group-title="Нет потока",Феникс+ Кино [НЕТ ПОТОКА]
+https://example.invalid/iptv-unavailable/channel-9.m3u8
+#EXTINF:-1 tvg-id="GlazamiTurista.ru" tvg-name="Глазами туриста" group-title="Нет потока",Глазами туриста [НЕТ ПОТОКА]
+https://example.invalid/iptv-unavailable/channel-10.m3u8
+#EXTINF:-1 tvg-id="" tvg-name="Перец" group-title="Нет потока",Перец [НЕТ ПОТОКА]
+https://example.invalid/iptv-unavailable/channel-11.m3u8
+#EXTINF:-1 tvg-id="ZhivayaPlaneta.ru" tvg-name="Живая планета" group-title="Нет потока",Живая планета [НЕТ ПОТОКА]
+https://example.invalid/iptv-unavailable/channel-12.m3u8
+#EXTINF:-1 tvg-id="RusskiyBestseller.ru" tvg-name="Русский бестселлер" group-title="Нет потока",Русский бестселлер [НЕТ ПОТОКА]
+https://example.invalid/iptv-unavailable/channel-13.m3u8
+#EXTINF:-1 tvg-id="" tvg-name="Русская комедия" group-title="Нет потока",Русская комедия [НЕТ ПОТОКА]
+https://example.invalid/iptv-unavailable/channel-14.m3u8
+#EXTINF:-1 tvg-id="" tvg-name="Премиальное HD" group-title="Нет потока",Премиальное HD [НЕТ ПОТОКА]
+https://example.invalid/iptv-unavailable/hd.m3u8
+#EXTINF:-1 tvg-id="" tvg-name="Наше любимое HD" group-title="Нет потока",Наше любимое HD [НЕТ ПОТОКА]
+https://example.invalid/iptv-unavailable/hd.m3u8
+#EXTINF:-1 tvg-id="" tvg-name="Наш кинопоказ HD" group-title="Нет потока",Наш кинопоказ HD [НЕТ ПОТОКА]
+https://example.invalid/iptv-unavailable/hd.m3u8
+#EXTINF:-1 tvg-id="RusskiyIllusion.ru" tvg-name="Русский иллюзион" group-title="Нет потока",Русский иллюзион [НЕТ ПОТОКА]
+https://example.invalid/iptv-unavailable/channel-18.m3u8
+#EXTINF:-1 tvg-id="MosfilmGoldCollection.ru" tvg-name="Мосфильм. Золотая коллекция" group-title="Нет потока",Мосфильм. Золотая коллекция [НЕТ ПОТОКА]
+https://example.invalid/iptv-unavailable/channel-19.m3u8
+#EXTINF:-1 tvg-id="" tvg-name="Россия 1 HD (+4)" group-title="Нет потока",Россия 1 HD (+4) [НЕТ ПОТОКА]
+https://example.invalid/iptv-unavailable/1-hd-4.m3u8
 #EXTINF:-1 tvg-id="Russia24.ru" tvg-name="Россия 24" group-title="IPTV",Россия 24
 https://stream.smotrim.ru/hls2/russia24nl_smotrim/playlist_5.m3u8
+#EXTINF:-1 tvg-id="" tvg-name="Дом кино Премиум HD" group-title="Нет потока",Дом кино Премиум HD [НЕТ ПОТОКА]
+https://example.invalid/iptv-unavailable/hd.m3u8
 #EXTINF:-1 tvg-id="ChannelOne.ru" tvg-name="Первый канал" group-title="IPTV",Первый канал
 https://streaming.televizor-24-tochka.ru/live/4.m3u8
 #EXTINF:-1 tvg-id="RENTV.ru" tvg-name="Рен ТВ" group-title="IPTV",Рен ТВ
 http://185.23.80.23:8080/REN/index.m3u8
 #EXTINF:-1 tvg-id="TVCentr.ru" tvg-name="ТВЦ" group-title="IPTV",ТВЦ
 https://tvc-hls.cdnvideo.ru/tvc-res/smil:vd9221.smil/playlist.m3u8
-#EXTINF:-1 tvg-id="Mir.ru" tvg-name="МИР (+4)" group-title="IPTV",МИР (+4)
-https://tvcdn01.oktv.kz/tv/mir/index.m3u8
+#EXTINF:-1 tvg-id="Mir.ru" tvg-name="МИР (+4)" group-title="Нет потока",МИР (+4) [НЕТ ПОТОКА]
+https://example.invalid/iptv-unavailable/4.m3u8
 #EXTINF:-1 tvg-id="Zvezda.ru" tvg-name="Звезда" group-title="IPTV",Звезда
 https://streaming.televizor-24-tochka.ru/live/21.m3u8
 #EXTINF:-1 tvg-id="MuzTV.ru" tvg-name="МУЗ ТВ" group-title="IPTV",МУЗ ТВ

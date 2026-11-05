@@ -37,6 +37,6 @@ TV1000 Русское кино | vijuTV1000russkoe.ru | EPG source not verified
 Первый канал | ChannelOne.ru | EPG source not verified
 Рен ТВ | RENTV.ru | EPG source not verified
 ТВЦ | TVCentr.ru | EPG source not verified
-МИР (+4) | Mir.ru | EPG source not verified
+МИР (+4) | Mir.ru | guide not verified
 Звезда | Zvezda.ru | EPG source not verified
 МУЗ ТВ | MuzTV.ru | EPG source not verified
