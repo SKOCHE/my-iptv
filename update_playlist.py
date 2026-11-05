@@ -9,7 +9,7 @@ A stream is published only if:
   2) the stream record is attached to that channel ID;
   3) feed metadata supports Russian-language/Russian-area viewing;
   4) stream is not tagged Geo-blocked or Not 24/7;
-  5) ffmpeg can decode a short video sample (not just HTTP 200 / HEAD);
+  5) ffmpeg can decode a short video sample and obvious flat-color frames are rejected;
   6) the URL is unique in the final playlist.
 
 This still cannot prove editorial identity (e.g. distinguish a paywall slate
@@ -82,19 +82,56 @@ def make_ffmpeg_command(stream: dict):
     return cmd
 
 def decode_video(stream: dict) -> tuple[bool, str]:
+    """Decode video and reject obvious frozen/solid-color placeholder frames."""
     try:
-        proc = subprocess.run(
-            make_ffmpeg_command(stream),
-            capture_output=True, text=True, timeout=TIMEOUT + DECODE_SECONDS + 8
-        )
-        if proc.returncode == 0:
-            return True, "decoded video sample"
-        detail = (proc.stderr or "").strip().splitlines()
-        return False, (detail[-1][:240] if detail else f"ffmpeg exit {proc.returncode}")
+        headers = []
+        headers.append(f"User-Agent: {stream.get('user_agent') or UA}")
+        if stream.get("referrer"):
+            headers.append(f"Referer: {stream['referrer']}")
+        cmd = [
+            "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
+            "-rw_timeout", str(TIMEOUT * 1_000_000),
+            "-headers", "\r\n".join(headers) + "\r\n",
+            "-i", stream["url"], "-t", "12",
+            "-vf", "fps=1,scale=160:90",
+            "-frames:v", "8", "-f", "image2pipe", "-vcodec", "mjpeg", "-"
+        ]
+        proc = subprocess.run(cmd, capture_output=True, timeout=TIMEOUT + 18)
+        if proc.returncode != 0 or not proc.stdout:
+            err = proc.stderr.decode("utf-8", "replace").strip().splitlines()
+            return False, err[-1][:220] if err else "no decodable video frames"
+        # Split concatenated JPEGs and inspect variance/entropy. This catches
+        # obvious all-green/all-black static output, not branded paywall cards.
+        from PIL import Image, ImageStat
+        import io
+        blob = proc.stdout
+        frames = []
+        pos = 0
+        while True:
+            a = blob.find(b"\xff\xd8", pos)
+            if a < 0: break
+            b = blob.find(b"\xff\xd9", a + 2)
+            if b < 0: break
+            try:
+                im = Image.open(io.BytesIO(blob[a:b+2])).convert("RGB")
+                stat = ImageStat.Stat(im)
+                variance = sum(stat.var) / 3
+                means = stat.mean
+                frames.append((variance, means))
+            except Exception:
+                pass
+            pos = b + 2
+        if not frames:
+            return False, "could not decode sample frames"
+        # At least 3 different decoded frames, with visible non-uniform content.
+        useful = [f for f in frames if f[0] > 18 and not (f[1][1] > 1.35*f[1][0] and f[1][1] > 1.2*f[1][2])]
+        if len(useful) < 2:
+            return False, "flat/green/black placeholder-like video sample"
+        return True, f"{len(frames)} frames decoded; {len(useful)} non-flat samples"
     except subprocess.TimeoutExpired:
-        return False, "decode timeout"
+        return False, "video decode timeout"
     except Exception as exc:
-        return False, str(exc)[:240]
+        return False, str(exc)[:220]
 
 def main() -> int:
     if not MANIFEST.exists():
