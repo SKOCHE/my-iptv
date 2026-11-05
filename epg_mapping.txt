@@ -1,42 +1,42 @@
 # name | tvg-id | XMLTV source URLs (if listed)
-Шансон ТВ | ShansonTV.ru | EPG source not listed
-Победа | Pobeda.ru | guide not found
+Шансон ТВ | ShansonTV.ru | EPG source not verified
+Победа | Pobeda.ru | guide not verified
 Viasat History | | no channel ID
 Viasat Nature | | no channel ID
-TV1000 Русское кино | vijuTV1000russkoe.ru | EPG source not listed
-Родное кино | RodnoeKino.ru | guide not found
-Киносерия | Kinoseriya.ru | EPG source not listed
-Наше новое кино | NasheNovoeKino.ru | guide not found
-ТНТ4 | TNT4.ru | guide not found
-Дом кино | Domkino.ru | EPG source not listed
-Смотрим 100% Любовь | Smotrim100Lyubov.ru | EPG source not listed
-Звезда Плюс | ZvezdaPlus.ru | EPG source not listed
-НТВ (+4) | NTV.ru | guide not found
-ТНТ | TNT.ru | EPG source not listed
-Пятница! | Friday.ru | EPG source not listed
-Пятый канал | Channel5.ru | EPG source not listed
-СТС | STS.ru | EPG source not listed
-ТВ3 | TV3.ru | EPG source not listed
-Че! | Che.ru | EPG source not listed
-Домашний | Domashniy.ru | EPG source not listed
-КиноСезон | KinoSezon.ru | guide not found
-Феникс+ Кино | FeniksplusKino.ru | guide not found
-Глазами туриста | GlazamiTurista.ru | guide not found
+TV1000 Русское кино | vijuTV1000russkoe.ru | EPG source not verified
+Родное кино | RodnoeKino.ru | guide not verified
+Киносерия | Kinoseriya.ru | EPG source not verified
+Наше новое кино | NasheNovoeKino.ru | guide not verified
+ТНТ4 | TNT4.ru | guide not verified
+Дом кино | Domkino.ru | EPG source not verified
+Смотрим 100% Любовь | Smotrim100Lyubov.ru | EPG source not verified
+Звезда Плюс | ZvezdaPlus.ru | EPG source not verified
+НТВ (+4) | NTV.ru | guide not verified
+ТНТ | TNT.ru | EPG source not verified
+Пятница! | Friday.ru | EPG source not verified
+Пятый канал | Channel5.ru | EPG source not verified
+СТС | STS.ru | EPG source not verified
+ТВ3 | TV3.ru | EPG source not verified
+Че! | Che.ru | EPG source not verified
+Домашний | Domashniy.ru | EPG source not verified
+КиноСезон | KinoSezon.ru | guide not verified
+Феникс+ Кино | FeniksplusKino.ru | guide not verified
+Глазами туриста | GlazamiTurista.ru | guide not verified
 Перец | | no channel ID
-Живая планета | ZhivayaPlaneta.ru | guide not found
-Русский бестселлер | RusskiyBestseller.ru | guide not found
+Живая планета | ZhivayaPlaneta.ru | guide not verified
+Русский бестселлер | RusskiyBestseller.ru | guide not verified
 Русская комедия | | no channel ID
 Премиальное HD | | no channel ID
 Наше любимое HD | | no channel ID
 Наш кинопоказ HD | | no channel ID
-Русский иллюзион | RusskiyIllusion.ru | guide not found
-Мосфильм. Золотая коллекция | MosfilmGoldCollection.ru | guide not found
-Россия 1 HD (+4) | | no channel ID
-Россия 24 | Russia24.ru | EPG source not listed
+Русский иллюзион | RusskiyIllusion.ru | guide not verified
+Мосфильм. Золотая коллекция | MosfilmGoldCollection.ru | guide not verified
+Россия 1 HD (+4) |  | guide not verified
+Россия 24 | Russia24.ru | EPG source not verified
 Дом кино Премиум HD | | no channel ID
-Первый канал | ChannelOne.ru | EPG source not listed
-Рен ТВ | RENTV.ru | EPG source not listed
-ТВЦ | TVCentr.ru | EPG source not listed
-МИР (+4) | Mir.ru | EPG source not listed
-Звезда | Zvezda.ru | EPG source not listed
-МУЗ ТВ | MuzTV.ru | EPG source not listed
+Первый канал | ChannelOne.ru | EPG source not verified
+Рен ТВ | RENTV.ru | EPG source not verified
+ТВЦ | TVCentr.ru | EPG source not verified
+МИР (+4) | Mir.ru | EPG source not verified
+Звезда | Zvezda.ru | EPG source not verified
+МУЗ ТВ | MuzTV.ru | EPG source not verified
