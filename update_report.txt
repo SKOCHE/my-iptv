@@ -1,5 +1,5 @@
 SKOCHE IPTV verification report
-Generated UTC: 2026-11-05 03:41:32
+Generated UTC: 2026-11-05 03:54:45
 Requested channels: 41
 Stream test: ffmpeg decodes up to 8 seconds of video; this is stronger than HTTP/HEAD.
 LIMIT: successful decoding does NOT prove the picture is the requested channel or bypass a paid subscription.
@@ -23,7 +23,7 @@ VIDEO DECODE OK | Пятница! | channel=Friday.ru | feed=SD | timezones=Euro
 NOT MAPPED/AMBIGUOUS | Пятый канал | channel IDs: 5Kanal.kz,Channel5.kg,Channel5.ru,Channel5.sg,Channel5.th,Channel5.ua,Channel5.uk,ZIZTV.kn
 NOT MAPPED/AMBIGUOUS | СТС | channel IDs: CTC.pe,STS.ru
 NOT MAPPED/AMBIGUOUS | ТВ3 | channel IDs: TV3.dk,TV3.dz,TV3.ee,TV3.es,TV3.gh,TV3.kh,TV3.lt,TV3.lv,TV3.mn,TV3.my,TV3.no,TV3.ru,TV3.se,TV3.si,TV3.tz,TV3.ws,TV3Plus.dk,TV3Plus.lv,TV3Plus.no,TVChosun3.kr,VirginMediaOne.ie
-VIDEO DECODE OK | Че! | channel=Che.ru | feed=SD | timezones=Europe/Moscow | quality=576p | url=http://flussonic.linkintel.ru/che/index.m3u8
+VIDEO DECODE OK | Че! | channel=Che.ru | feed=SD | timezones=Europe/Moscow | quality=576p | url=http://176.118.197.101/Che/index.m3u8
 VIDEO DECODE OK | Домашний | channel=Domashniy.ru | feed=SD | timezones=Europe/Moscow | quality=576p | url=http://stream.mcquack.net/227/index.m3u8
 NO VERIFIED VIDEO | КиноСезон | id=KinoSezon.ru | RU-feed candidates=0 | test=no eligible candidates
 NO VERIFIED VIDEO | Феникс+ Кино | id=FeniksplusKino.ru | RU-feed candidates=1 | test=Error opening input files: Connection timed out
