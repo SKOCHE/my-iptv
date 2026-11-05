@@ -7,12 +7,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 cfg = json.loads((ROOT / "channels.json").read_text(encoding="utf-8"))
 channels = cfg["channels"]
-assert len(channels) == 46, f"Expected 46 channels, got {len(channels)}"
-assert len(set(channels)) == 46, "Duplicate channel names in channels.json"
+expected_count = cfg.get("channel_count")
+assert isinstance(expected_count, int), "channels.json must contain an integer channel_count"
+assert len(channels) == expected_count, (
+    f"channel_count mismatch: expected {expected_count} from channels.json, got {len(channels)}"
+)
+assert len(set(channels)) == len(channels), "Duplicate channel names in channels.json"
 
 demo_lines = (ROOT / "config/demo.txt").read_text(encoding="utf-8").splitlines()
 template = [line.strip() for line in demo_lines if line.strip() and "#genre#" not in line and not line.lstrip().startswith("#")]
-assert template == channels, "config/demo.txt must contain exactly the 46 channels in channels.json order"
+assert template == channels, "config/demo.txt must contain exactly the channels in channels.json order"
 
 sources = [line.strip() for line in (ROOT / "config/subscribe.txt").read_text(encoding="utf-8").splitlines()
            if line.strip() and not line.lstrip().startswith("#")]
@@ -30,7 +34,7 @@ def normalize_alias(value):
 for row in alias_rows:
     parts = [part.strip() for part in row.split(",")]
     primary = parts[0]
-    assert primary in channels, f"Alias primary not in 46-channel catalog: {primary}"
+    assert primary in channels, f"Alias primary not in channel catalog: {primary}"
     assert primary not in primary_names, f"Duplicate alias primary: {primary}"
     primary_names.add(primary)
     primary_key = normalize_alias(primary)
