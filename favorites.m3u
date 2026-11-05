@@ -1,39 +1,15 @@
 #EXTM3U
 #EXTINF:-1 tvg-id="ShansonTV.ru" tvg-name="Шансон ТВ" group-title="Россия",Шансон ТВ
-http://catchup.videoline.ru/shanson/index.m3u8
-#EXTINF:-1 tvg-id="Pobeda.ru" tvg-name="Победа" group-title="Россия",Победа
-https://streaming.thestream.cyou/live/43.m3u8
-#EXTINF:-1 tvg-id="vijuTV1000russkoe.ru" tvg-name="TV1000 Русское кино" group-title="Россия",TV1000 Русское кино
-https://stream8.cinerama.uz/1058/tracks-v1a1/mono.m3u8
-#EXTINF:-1 tvg-id="RodnoeKino.ru" tvg-name="Родное кино" group-title="Россия",Родное кино
-http://stream.mcquack.net/242/index.m3u8
+https://hls-shansontv.cdnvideo.ru/shansontv/smil:shansontv.smil/playlist.m3u8
 #EXTINF:-1 tvg-id="Kinoseriya.ru" tvg-name="Киносерия" group-title="Россия",Киносерия
 https://fs.uplink.kz/kinoseria/mono.m3u8?token=onlinetv
-#EXTINF:-1 tvg-id="NasheNovoeKino.ru" tvg-name="Наше новое кино" group-title="Россия",Наше новое кино
-https://stream8.cinerama.uz/1051/tracks-v1a1/mono.m3u8
-#EXTINF:-1 tvg-id="TNT4.ru" tvg-name="ТНТ4" group-title="Россия",ТНТ4
-http://flussonic.linkintel.ru/tnt4/index.m3u8
-#EXTINF:-1 tvg-id="Domkino.ru" tvg-name="Дом кино" group-title="Россия",Дом кино
-http://stream.mcquack.net/236/index.m3u8
 #EXTINF:-1 tvg-id="Smotrim100Lyubov.ru" tvg-name="Смотрим 100% Любовь" group-title="Россия",Смотрим 100% Любовь
 https://stream.smotrim.ru/hls/fasttv01/playlist_2.m3u8
-#EXTINF:-1 tvg-id="ZvezdaPlus.ru" tvg-name="Звезда Плюс" group-title="Россия",Звезда Плюс
-http://tvzvezda.bonus-tv.ru/cdn/zvezdaplus/playlist.m3u8
 #EXTINF:-1 tvg-id="Friday.ru" tvg-name="Пятница!" group-title="Россия",Пятница!
 https://vod.tuva.ru/friday/index.m3u8
-#EXTINF:-1 tvg-id="Che.ru" tvg-name="Че!" group-title="Россия",Че!
-http://176.118.197.101/Che/index.m3u8
 #EXTINF:-1 tvg-id="Domashniy.ru" tvg-name="Домашний" group-title="Россия",Домашний
-http://stream.mcquack.net/227/index.m3u8
-#EXTINF:-1 tvg-id="GlazamiTurista.ru" tvg-name="Глазами туриста" group-title="Россия",Глазами туриста
-https://stream8.cinerama.uz/1423/tracks-v1a1/mono.m3u8
-#EXTINF:-1 tvg-id="ZhivayaPlaneta.ru" tvg-name="Живая планета" group-title="Россия",Живая планета
-https://stream8.cinerama.uz/1250/tracks-v1a1/mono.m3u8
-#EXTINF:-1 tvg-id="RusskiyBestseller.ru" tvg-name="Русский бестселлер" group-title="Россия",Русский бестселлер
-http://stream.mcquack.net/208/index.m3u8
-#EXTINF:-1 tvg-id="MosfilmGoldCollection.ru" tvg-name="Мосфильм. Золотая коллекция" group-title="Россия",Мосфильм. Золотая коллекция
-http://stream.mcquack.net/369/index.m3u8
+#EXTVLCOPT:http-referrer=https://televizor24tochka.ru/
+#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36
+https://streaming.televizor-24-tochka.ru/live/17.m3u8
 #EXTINF:-1 tvg-id="Russia24.ru" tvg-name="Россия 24" group-title="Россия",Россия 24
 https://stream.smotrim.ru/hls2/russia24nl_smotrim/playlist_5.m3u8
-#EXTINF:-1 tvg-id="RENTV.ru" tvg-name="Рен ТВ" group-title="Россия",Рен ТВ
-http://185.23.80.23:8080/REN/index.m3u8

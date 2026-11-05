@@ -1,0 +1,7 @@
+# EPG mapping: channel name | tvg-id | guide sources
+Шансон ТВ | ShansonTV.ru | EPG source not listed
+Киносерия | Kinoseriya.ru | EPG source not listed
+Смотрим 100% Любовь | Smotrim100Lyubov.ru | EPG source not listed
+Пятница! | Friday.ru | EPG source not listed
+Домашний | Domashniy.ru | EPG source not listed
+Россия 24 | Russia24.ru | EPG source not listed

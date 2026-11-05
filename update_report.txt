@@ -1,54 +1,50 @@
-SKOCHE IPTV verification report
-Generated UTC: 2026-11-05 03:54:45
-Requested channels: 41
-Stream test: ffmpeg decodes up to 8 seconds of video; this is stronger than HTTP/HEAD.
-LIMIT: successful decoding does NOT prove the picture is the requested channel or bypass a paid subscription.
-Timezone: feed timezone metadata is recorded per stream. EPG times should be converted by Televizo using the device timezone; M3U cannot safely force one timezone for every regional feed.
+IPTV v5 audit
+UTC: 2026-11-05 04:02:23
+Video test = FFmpeg decode of up to 12 seconds + rejection of obvious flat/black/green frames.
+IMPORTANT: this cannot identify the channel logo/content or detect every moving paywall slate.
+Reported-bad domains excluded: cinerama.uz, linkintel.ru, mcquack.net, thestream.cyou
 
-VIDEO DECODE OK | Шансон ТВ | channel=ShansonTV.ru | feed=SD | timezones=Europe/Moscow | quality=576p | url=http://catchup.videoline.ru/shanson/index.m3u8
-VIDEO DECODE OK | Победа | channel=Pobeda.ru | feed=SD | timezones=Europe/Moscow | quality=576i | url=https://streaming.thestream.cyou/live/43.m3u8
-NOT MAPPED/AMBIGUOUS | Viasat History | channel IDs: ViasatHistory.bg,ViasatHistory.cz,ViasatHistory.fi,ViasatHistory.gr,ViasatHistory.hu,ViasatHistory.ro,ViasatHistory.se,ViasatHistory.si,ViasatHistory.tr,ViasatHistory.ua
-NOT MAPPED/AMBIGUOUS | Viasat Nature | channel IDs: ViasatNature.bg,ViasatNature.cz,ViasatNature.fi,ViasatNature.gr,ViasatNature.hu,ViasatNature.ro,ViasatNature.se,ViasatNature.si,ViasatNature.ua
-VIDEO DECODE OK | TV1000 Русское кино | channel=vijuTV1000russkoe.ru | feed=SD | timezones=Europe/Moscow | quality=576i | url=https://stream8.cinerama.uz/1058/tracks-v1a1/mono.m3u8
-VIDEO DECODE OK | Родное кино | channel=RodnoeKino.ru | feed=SD | timezones=Europe/Moscow | quality=576p | url=http://stream.mcquack.net/242/index.m3u8
-VIDEO DECODE OK | Киносерия | channel=Kinoseriya.ru | feed=SD | timezones=Europe/Moscow | quality=576p | url=https://fs.uplink.kz/kinoseria/mono.m3u8?token=onlinetv
-VIDEO DECODE OK | Наше новое кино | channel=NasheNovoeKino.ru | feed=SD | timezones=Europe/Moscow | quality=576i | url=https://stream8.cinerama.uz/1051/tracks-v1a1/mono.m3u8
-VIDEO DECODE OK | ТНТ4 | channel=TNT4.ru | feed=SD | timezones=Europe/Moscow | quality=576p | url=http://flussonic.linkintel.ru/tnt4/index.m3u8
-VIDEO DECODE OK | Дом кино | channel=Domkino.ru | feed=SD | timezones=Europe/Moscow | quality=576p | url=http://stream.mcquack.net/236/index.m3u8
-VIDEO DECODE OK | Смотрим 100% Любовь | channel=Smotrim100Lyubov.ru | feed=SD | timezones=Europe/Moscow | quality=720p | url=https://stream.smotrim.ru/hls/fasttv01/playlist_2.m3u8
-VIDEO DECODE OK | Звезда Плюс | channel=ZvezdaPlus.ru | feed=HD | timezones=Europe/Moscow | quality=1080p | url=http://tvzvezda.bonus-tv.ru/cdn/zvezdaplus/playlist.m3u8
-NOT MAPPED/AMBIGUOUS | НТВ (+4) | channel IDs: NTV.rs,NTV.ru,Nova.bg
-NOT MAPPED/AMBIGUOUS | ТНТ | channel IDs: TNT.es,TNT.pl,TNT.ru,TNT.us,WarnerTV.es,WarnerTV.pl
-VIDEO DECODE OK | Пятница! | channel=Friday.ru | feed=SD | timezones=Europe/Moscow | quality=576p | url=https://vod.tuva.ru/friday/index.m3u8
-NOT MAPPED/AMBIGUOUS | Пятый канал | channel IDs: 5Kanal.kz,Channel5.kg,Channel5.ru,Channel5.sg,Channel5.th,Channel5.ua,Channel5.uk,ZIZTV.kn
-NOT MAPPED/AMBIGUOUS | СТС | channel IDs: CTC.pe,STS.ru
-NOT MAPPED/AMBIGUOUS | ТВ3 | channel IDs: TV3.dk,TV3.dz,TV3.ee,TV3.es,TV3.gh,TV3.kh,TV3.lt,TV3.lv,TV3.mn,TV3.my,TV3.no,TV3.ru,TV3.se,TV3.si,TV3.tz,TV3.ws,TV3Plus.dk,TV3Plus.lv,TV3Plus.no,TVChosun3.kr,VirginMediaOne.ie
-VIDEO DECODE OK | Че! | channel=Che.ru | feed=SD | timezones=Europe/Moscow | quality=576p | url=http://176.118.197.101/Che/index.m3u8
-VIDEO DECODE OK | Домашний | channel=Domashniy.ru | feed=SD | timezones=Europe/Moscow | quality=576p | url=http://stream.mcquack.net/227/index.m3u8
-NO VERIFIED VIDEO | КиноСезон | id=KinoSezon.ru | RU-feed candidates=0 | test=no eligible candidates
-NO VERIFIED VIDEO | Феникс+ Кино | id=FeniksplusKino.ru | RU-feed candidates=1 | test=Error opening input files: Connection timed out
-VIDEO DECODE OK | Глазами туриста | channel=GlazamiTurista.ru | feed=SD | timezones=Europe/Moscow | quality=576i | url=https://stream8.cinerama.uz/1423/tracks-v1a1/mono.m3u8
-NOT MAPPED/AMBIGUOUS | Перец | channel IDs: none
-VIDEO DECODE OK | Живая планета | channel=ZhivayaPlaneta.ru | feed=SD | timezones=Europe/Moscow | quality=576p | url=https://stream8.cinerama.uz/1250/tracks-v1a1/mono.m3u8
-VIDEO DECODE OK | Русский бестселлер | channel=RusskiyBestseller.ru | feed=SD | timezones=Europe/Moscow | quality=576p | url=http://stream.mcquack.net/208/index.m3u8
-NOT MAPPED/AMBIGUOUS | Русская комедия | channel IDs: none
-NOT MAPPED/AMBIGUOUS | Премиальное HD | channel IDs: none
-NOT MAPPED/AMBIGUOUS | Наше любимое HD | channel IDs: none
-NOT MAPPED/AMBIGUOUS | Наш кинопоказ HD | channel IDs: none
-NO VERIFIED VIDEO | Русский иллюзион | id=RusskiyIllusion.ru | RU-feed candidates=1 | test=Error opening input files: Connection timed out
-VIDEO DECODE OK | Мосфильм. Золотая коллекция | channel=MosfilmGoldCollection.ru | feed=SD | timezones=Europe/Moscow | quality=576p | url=http://stream.mcquack.net/369/index.m3u8
-NOT MAPPED/AMBIGUOUS | Россия 1 HD (+4) | channel IDs: none
-VIDEO DECODE OK | Россия 24 | channel=Russia24.ru | feed=SD | timezones=Europe/Moscow | quality=720p | url=https://stream.smotrim.ru/hls2/russia24nl_smotrim/playlist_5.m3u8
-NOT MAPPED/AMBIGUOUS | Дом кино Премиум HD | channel IDs: none
-NOT MAPPED/AMBIGUOUS | Первый канал | channel IDs: 1TV.af,1TV.ge,1TV.md,AlawlaTV.iq,ChannelOne.lk,ChannelOne.ru,ChannelOne.us,ENAPLAY.kr
-VIDEO DECODE OK | Рен ТВ | channel=RENTV.ru | feed=SD | timezones=Europe/Moscow | quality=576p | url=http://185.23.80.23:8080/REN/index.m3u8
-NOT MAPPED/AMBIGUOUS | ТВЦ | channel IDs: TVC.ec,TVC.ge,TVC.mx,TVC.ng,TVC.pl,TVCentr.ru,TelevisionCaribbean.kn
-NOT MAPPED/AMBIGUOUS | МИР (+4) | channel IDs: Mir.ru,MirNovosibirsk.ru
-NOT MAPPED/AMBIGUOUS | Звезда | channel IDs: Zvezda.ru,ZvezdaTV.rs
-NOT MAPPED/AMBIGUOUS | МУЗ ТВ | channel IDs: MuzTV.az,MuzTV.ru
+VIDEO DECODE OK (identity not visually confirmed) | Шансон ТВ | ShansonTV.ru | feed=SD | timezone=Europe/Moscow | 8 frames; 8 non-flat non-green | https://hls-shansontv.cdnvideo.ru/shansontv/smil:shansontv.smil/playlist.m3u8
+NO VERIFIED STREAM | Победа | channel_id=Pobeda.ru | RU candidates=1 | no decoded video frames
+UNRESOLVED CHANNEL ID | Viasat History | ViasatHistory.bg,ViasatHistory.cz,ViasatHistory.fi,ViasatHistory.gr,ViasatHistory.hu,ViasatHistory.ro,ViasatHistory.se,ViasatHistory.si,ViasatHistory.tr,ViasatHistory.ua
+UNRESOLVED CHANNEL ID | Viasat Nature | ViasatNature.bg,ViasatNature.cz,ViasatNature.fi,ViasatNature.gr,ViasatNature.hu,ViasatNature.ro,ViasatNature.se,ViasatNature.si,ViasatNature.ua
+NO VERIFIED STREAM | TV1000 Русское кино | channel_id=vijuTV1000russkoe.ru | RU candidates=1 | no decoded video frames
+NO VERIFIED STREAM | Родное кино | channel_id=RodnoeKino.ru | RU candidates=0 | no eligible streams
+VIDEO DECODE OK (identity not visually confirmed) | Киносерия | Kinoseriya.ru | feed=SD | timezone=Europe/Moscow | 8 frames; 8 non-flat non-green | https://fs.uplink.kz/kinoseria/mono.m3u8?token=onlinetv
+NO VERIFIED STREAM | Наше новое кино | channel_id=NasheNovoeKino.ru | RU candidates=0 | no eligible streams
+NO VERIFIED STREAM | ТНТ4 | channel_id=TNT4.ru | RU candidates=0 | no eligible streams
+NO VERIFIED STREAM | Дом кино | channel_id=Domkino.ru | RU candidates=1 | no decoded video frames
+VIDEO DECODE OK (identity not visually confirmed) | Смотрим 100% Любовь | Smotrim100Lyubov.ru | feed=SD | timezone=Europe/Moscow | 8 frames; 8 non-flat non-green | https://stream.smotrim.ru/hls/fasttv01/playlist_2.m3u8
+NO VERIFIED STREAM | Звезда Плюс | channel_id=ZvezdaPlus.ru | RU candidates=0 | no eligible streams
+UNRESOLVED CHANNEL ID | НТВ (+4) | NTV.rs,NTV.ru,Nova.bg
+UNRESOLVED CHANNEL ID | ТНТ | TNT.es,TNT.pl,TNT.ru,TNT.us,WarnerTV.es,WarnerTV.pl
+VIDEO DECODE OK (identity not visually confirmed) | Пятница! | Friday.ru | feed=SD | timezone=Europe/Moscow | 8 frames; 8 non-flat non-green | https://vod.tuva.ru/friday/index.m3u8
+UNRESOLVED CHANNEL ID | Пятый канал | 5Kanal.kz,Channel5.kg,Channel5.ru,Channel5.sg,Channel5.th,Channel5.ua,Channel5.uk,ZIZTV.kn
+UNRESOLVED CHANNEL ID | СТС | CTC.pe,STS.ru
+UNRESOLVED CHANNEL ID | ТВ3 | TV3.dk,TV3.dz,TV3.ee,TV3.es,TV3.gh,TV3.kh,TV3.lt,TV3.lv,TV3.mn,TV3.my,TV3.no,TV3.ru,TV3.se,TV3.si,TV3.tz,TV3.ws,TV3Plus.dk,TV3Plus.lv,TV3Plus.no,TVChosun3.kr,VirginMediaOne.ie
+NO VERIFIED STREAM | Че! | channel_id=Che.ru | RU candidates=0 | no eligible streams
+VIDEO DECODE OK (identity not visually confirmed) | Домашний | Domashniy.ru | feed=SD | timezone=Europe/Moscow | 8 frames; 8 non-flat non-green | https://streaming.televizor-24-tochka.ru/live/17.m3u8
+NO VERIFIED STREAM | КиноСезон | channel_id=KinoSezon.ru | RU candidates=0 | no eligible streams
+NO VERIFIED STREAM | Феникс+ Кино | channel_id=FeniksplusKino.ru | RU candidates=0 | no eligible streams
+NO VERIFIED STREAM | Глазами туриста | channel_id=GlazamiTurista.ru | RU candidates=0 | no eligible streams
+UNRESOLVED CHANNEL ID | Перец | none
+NO VERIFIED STREAM | Живая планета | channel_id=ZhivayaPlaneta.ru | RU candidates=0 | no eligible streams
+NO VERIFIED STREAM | Русский бестселлер | channel_id=RusskiyBestseller.ru | RU candidates=0 | no eligible streams
+UNRESOLVED CHANNEL ID | Русская комедия | none
+UNRESOLVED CHANNEL ID | Премиальное HD | none
+UNRESOLVED CHANNEL ID | Наше любимое HD | none
+UNRESOLVED CHANNEL ID | Наш кинопоказ HD | none
+NO VERIFIED STREAM | Русский иллюзион | channel_id=RusskiyIllusion.ru | RU candidates=0 | no eligible streams
+NO VERIFIED STREAM | Мосфильм. Золотая коллекция | channel_id=MosfilmGoldCollection.ru | RU candidates=1 | no decoded video frames
+UNRESOLVED CHANNEL ID | Россия 1 HD (+4) | none
+VIDEO DECODE OK (identity not visually confirmed) | Россия 24 | Russia24.ru | feed=SD | timezone=Europe/Moscow | 8 frames; 8 non-flat non-green | https://stream.smotrim.ru/hls2/russia24nl_smotrim/playlist_5.m3u8
+UNRESOLVED CHANNEL ID | Дом кино Премиум HD | none
+UNRESOLVED CHANNEL ID | Первый канал | 1TV.af,1TV.ge,1TV.md,AlawlaTV.iq,ChannelOne.lk,ChannelOne.ru,ChannelOne.us,ENAPLAY.kr
+NO VERIFIED STREAM | Рен ТВ | channel_id=RENTV.ru | RU candidates=0 | no eligible streams
+UNRESOLVED CHANNEL ID | ТВЦ | TVC.ec,TVC.ge,TVC.mx,TVC.ng,TVC.pl,TVCentr.ru,TelevisionCaribbean.kn
+UNRESOLVED CHANNEL ID | МИР (+4) | Mir.ru,MirNovosibirsk.ru
+UNRESOLVED CHANNEL ID | Звезда | Zvezda.ru,ZvezdaTV.rs
+UNRESOLVED CHANNEL ID | МУЗ ТВ | MuzTV.az,MuzTV.ru
 
-SUMMARY
-Mapped IDs: 22/41
-Video samples decoded: 19/41
-Unmapped or ambiguous: 19
-No eligible/decodeable stream: 3
+SUMMARY: decoded=6/41; unresolved/no verified stream=35
+This count is NOT a guarantee of channel identity; visual/EPG confirmation is still required.
