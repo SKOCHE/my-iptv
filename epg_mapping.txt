@@ -1,7 +1,42 @@
-# EPG mapping: channel name | tvg-id | guide sources
+# name | tvg-id | XMLTV source URLs (if listed)
 Шансон ТВ | ShansonTV.ru | EPG source not listed
+Победа | Pobeda.ru | guide not found
+Viasat History | | no channel ID
+Viasat Nature | | no channel ID
+TV1000 Русское кино | vijuTV1000russkoe.ru | EPG source not listed
+Родное кино | RodnoeKino.ru | guide not found
 Киносерия | Kinoseriya.ru | EPG source not listed
+Наше новое кино | NasheNovoeKino.ru | guide not found
+ТНТ4 | TNT4.ru | guide not found
+Дом кино | Domkino.ru | EPG source not listed
 Смотрим 100% Любовь | Smotrim100Lyubov.ru | EPG source not listed
+Звезда Плюс | ZvezdaPlus.ru | EPG source not listed
+НТВ (+4) | | no channel ID
+ТНТ | TNT.ru | EPG source not listed
 Пятница! | Friday.ru | EPG source not listed
+Пятый канал | | no channel ID
+СТС | STS.ru | EPG source not listed
+ТВ3 | | no channel ID
+Че! | Che.ru | EPG source not listed
 Домашний | Domashniy.ru | EPG source not listed
+КиноСезон | KinoSezon.ru | guide not found
+Феникс+ Кино | FeniksplusKino.ru | guide not found
+Глазами туриста | GlazamiTurista.ru | guide not found
+Перец | | no channel ID
+Живая планета | ZhivayaPlaneta.ru | guide not found
+Русский бестселлер | RusskiyBestseller.ru | guide not found
+Русская комедия | | no channel ID
+Премиальное HD | | no channel ID
+Наше любимое HD | | no channel ID
+Наш кинопоказ HD | | no channel ID
+Русский иллюзион | RusskiyIllusion.ru | guide not found
+Мосфильм. Золотая коллекция | MosfilmGoldCollection.ru | guide not found
+Россия 1 HD (+4) | | no channel ID
 Россия 24 | Russia24.ru | EPG source not listed
+Дом кино Премиум HD | | no channel ID
+Первый канал | ChannelOne.ru | EPG source not listed
+Рен ТВ | RENTV.ru | EPG source not listed
+ТВЦ | TVCentr.ru | EPG source not listed
+МИР (+4) | | no channel ID
+Звезда | Zvezda.ru | EPG source not listed
+МУЗ ТВ | MuzTV.ru | EPG source not listed
