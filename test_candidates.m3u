@@ -15,6 +15,8 @@ https://stream8.cinerama.uz/1051/index.m3u8
 https://streaming.thestream.cyou/live/44.m3u8
 #EXTINF:-1 tvg-name="ТНТ" group-title="IPTV",ТНТ [FFMPEG_OK]
 http://194.152.35.17/tnt/index.m3u8
+#EXTINF:-1 tvg-name="Пятый канал" group-title="IPTV",Пятый канал [HTTP_ONLY]
+http://178.134.1.158:8081/5channel/index.m3u8
 #EXTINF:-1 tvg-name="СТС" group-title="IPTV",СТС [FFMPEG_OK]
 http://194.152.35.17/sts/index.m3u8
 #EXTINF:-1 tvg-name="ТВ3" group-title="IPTV",ТВ3 [FFMPEG_OK]
@@ -25,9 +27,11 @@ http://185.46.16.239:8000/Domashniy
 https://stream.mcquack.net/208/index.m3u8
 #EXTINF:-1 tvg-name="Наш кинопоказ HD" group-title="IPTV",Наш кинопоказ HD [USER_CONFIRMED]
 http://46.53.200.153:7777/play/SRT_Nash_kinopokaz/index.m3u8
+#EXTINF:-1 tvg-name="Мосфильм. Золотая коллекция" group-title="IPTV",Мосфильм. Золотая коллекция [FFMPEG_OK]
+http://178.134.1.158:8081/mosfilm/index.m3u8
 #EXTINF:-1 tvg-name="Россия 24" group-title="IPTV",Россия 24 [USER_CONFIRMED]
 http://176.118.197.101/Rossiya24/index.m3u8
-#EXTINF:-1 tvg-name="Первый канал" group-title="IPTV",Первый канал [FFMPEG_OK]
+#EXTINF:-1 tvg-name="Первый канал" group-title="IPTV",Первый канал [HTTP_ONLY]
 http://5.188.221.43:8080/play/ort
 #EXTINF:-1 tvg-name="Рен ТВ" group-title="IPTV",Рен ТВ [FFMPEG_OK]
 http://185.46.16.239:8000/REN_TV

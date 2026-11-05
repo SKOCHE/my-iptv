@@ -1,23 +1,39 @@
 #EXTM3U
-#EXTINF:-1 tvg-name="Победа" group-title="IPTV",Победа
+#EXTINF:-1 tvg-name="Победа" group-title="IPTV",Победа [USER_CONFIRMED]
 https://streaming.thestream.cyou/live/43.m3u8
-#EXTINF:-1 tvg-name="Viasat History" group-title="IPTV",Viasat History
+#EXTINF:-1 tvg-name="Viasat History" group-title="IPTV",Viasat History [USER_CONFIRMED]
 http://178.124.179.122:8080/HistoryHD/index.m3u8
-#EXTINF:-1 tvg-name="Дом кино" group-title="IPTV",Дом кино
-https://streaming.thestream.cyou/live/44.m3u8
-#EXTINF:-1 tvg-name="Viasat Nature" group-title="IPTV",Viasat Nature
+#EXTINF:-1 tvg-name="Viasat Nature" group-title="IPTV",Viasat Nature [USER_CONFIRMED]
 https://stream8.cinerama.uz/1228/tracks-v1a1/mono.m3u8
-#EXTINF:-1 tvg-name="Viasat Nature" group-title="IPTV",Viasat Nature
+#EXTINF:-1 tvg-name="Viasat Nature" group-title="IPTV",Viasat Nature [USER_CONFIRMED]
 http://46.53.200.153:7777/play/a01k/index.m3u8
-#EXTINF:-1 tvg-name="Наш кинопоказ HD" group-title="IPTV",Наш кинопоказ HD
-http://46.53.200.153:7777/play/SRT_Nash_kinopokaz/index.m3u8
-#EXTINF:-1 tvg-name="Россия 24" group-title="IPTV",Россия 24
-http://176.118.197.101/Rossiya24/index.m3u8
-#EXTINF:-1 tvg-name="Родное кино" group-title="IPTV",Родное кино
+#EXTINF:-1 tvg-name="Родное кино" group-title="IPTV",Родное кино [USER_CONFIRMED]
 https://stream8.cinerama.uz/1052/index.m3u8
-#EXTINF:-1 tvg-name="Наше новое кино" group-title="IPTV",Наше новое кино
+#EXTINF:-1 tvg-name="Наше новое кино" group-title="IPTV",Наше новое кино [USER_CONFIRMED]
 https://stream8.cinerama.uz/1051/index.m3u8
-#EXTINF:-1 tvg-name="Русский бестселлер" group-title="IPTV",Русский бестселлер
+#EXTINF:-1 tvg-name="Дом кино" group-title="IPTV",Дом кино [USER_CONFIRMED]
+https://streaming.thestream.cyou/live/44.m3u8
+#EXTINF:-1 tvg-name="ТНТ" group-title="IPTV",ТНТ [FFMPEG_OK]
+http://194.152.35.17/tnt/index.m3u8
+#EXTINF:-1 tvg-name="СТС" group-title="IPTV",СТС [FFMPEG_OK]
+http://194.152.35.17/sts/index.m3u8
+#EXTINF:-1 tvg-name="ТВ3" group-title="IPTV",ТВ3 [FFMPEG_OK]
+http://185.46.16.239:8000/TV3
+#EXTINF:-1 tvg-name="Домашний" group-title="IPTV",Домашний [FFMPEG_OK]
+http://185.46.16.239:8000/Domashniy
+#EXTINF:-1 tvg-name="Русский бестселлер" group-title="IPTV",Русский бестселлер [USER_CONFIRMED]
 https://stream.mcquack.net/208/index.m3u8
-#EXTINF:-1 tvg-name="МУЗ ТВ" group-title="IPTV",МУЗ ТВ
+#EXTINF:-1 tvg-name="Наш кинопоказ HD" group-title="IPTV",Наш кинопоказ HD [USER_CONFIRMED]
+http://46.53.200.153:7777/play/SRT_Nash_kinopokaz/index.m3u8
+#EXTINF:-1 tvg-name="Мосфильм. Золотая коллекция" group-title="IPTV",Мосфильм. Золотая коллекция [FFMPEG_OK]
+http://178.134.1.158:8081/mosfilm/index.m3u8
+#EXTINF:-1 tvg-name="Россия 24" group-title="IPTV",Россия 24 [USER_CONFIRMED]
+http://176.118.197.101/Rossiya24/index.m3u8
+#EXTINF:-1 tvg-name="Рен ТВ" group-title="IPTV",Рен ТВ [FFMPEG_OK]
+http://185.46.16.239:8000/REN_TV
+#EXTINF:-1 tvg-name="ТВЦ" group-title="IPTV",ТВЦ [FFMPEG_OK]
+http://tvc-hls.cdnvideo.ru/tvc-res/smil:vd9221_2.smil/playlist.m3u8
+#EXTINF:-1 tvg-name="Звезда" group-title="IPTV",Звезда [FFMPEG_OK]
+https://tvchannelstream1.tvzvezda.ru/cdn/tvzvezda/playlist_hdhigh.m3u8
+#EXTINF:-1 tvg-name="МУЗ ТВ" group-title="IPTV",МУЗ ТВ [USER_CONFIRMED]
 https://stream8.cinerama.uz/1200/index.m3u8
