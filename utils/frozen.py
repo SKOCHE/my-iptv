@@ -1,102 +1,112 @@
-import gzip
+"""Docker startup compatibility for positional writes blocked by legacy seccomp."""
+import ctypes
+import errno
 import os
-import pickle
-import time
-from typing import Dict, Optional, Set
-
-MAX_BACKOFF = 24 * 3600
-BASE_BACKOFF = 60
-FREEZE_THRESHOLD = 3
-
-_frozen: Dict[str, Dict] = {}
+import platform
+import sys
+import tempfile
 
 
-def _now_ts() -> int:
-    return int(time.time())
+_ARCHITECTURES = {
+    "x86_64": (0xC000003E, 328),
+    "aarch64": (0xC00000B7, 287),
+    "arm64": (0xC00000B7, 287),
+    "armv7l": (0x40000028, 393),
+    "armv8l": (0x40000028, 393),
+    "armv6l": (0x40000028, 393),
+}
+_BPF_LD_W_ABS = 0x20
+_BPF_JMP_JEQ_K = 0x15
+_BPF_RET_K = 0x06
+_SECCOMP_RET_ALLOW = 0x7FFF0000
+_SECCOMP_RET_ERRNO = 0x00050000
+_PR_SET_NO_NEW_PRIVS = 38
+_PR_SET_SECCOMP = 22
+_SECCOMP_MODE_FILTER = 2
 
 
-def mark_url_bad(url: str, initial: bool = False) -> None:
-    if not url:
-        return
-    meta = _frozen.setdefault(url, {"bad_count": 0, "last_bad": 0, "last_good": 0, "frozen_until": None})
-    if initial:
-        meta["bad_count"] = max(meta["bad_count"], FREEZE_THRESHOLD)
-    else:
-        meta["bad_count"] += 1
-    meta["last_bad"] = _now_ts()
-    if meta["bad_count"] < FREEZE_THRESHOLD:
-        meta["frozen_until"] = None
-        return
-    backoff = min(MAX_BACKOFF, (2 ** meta["bad_count"]) * BASE_BACKOFF)
-    meta["frozen_until"] = _now_ts() + backoff
+class _SockFilter(ctypes.Structure):
+    _fields_ = [
+        ("code", ctypes.c_ushort),
+        ("jt", ctypes.c_ubyte),
+        ("jf", ctypes.c_ubyte),
+        ("k", ctypes.c_uint),
+    ]
 
 
-def mark_url_good(url: str) -> None:
-    if not url:
-        return
-    meta = _frozen.get(url)
-    if not meta:
-        return
-    meta["last_good"] = _now_ts()
-    # A successful probe breaks the consecutive-failure streak. Keeping the
-    # old count would make a later, unrelated failure freeze the URL too soon.
-    _frozen.pop(url, None)
+class _SockFprog(ctypes.Structure):
+    _fields_ = [
+        ("length", ctypes.c_ushort),
+        ("filter", ctypes.POINTER(_SockFilter)),
+    ]
 
 
-def is_url_frozen(url: str) -> bool:
-    meta = _frozen.get(url)
-    if not meta:
+def _install_write_fallback():
+    architecture = platform.machine().lower()
+    if ctypes.sizeof(ctypes.c_void_p) == 4 and architecture in {"aarch64", "arm64"}:
+        architecture = "armv7l"
+    if architecture not in _ARCHITECTURES:
+        raise RuntimeError(f"Unsupported architecture for positional-write compatibility: {architecture}")
+    audit_arch, syscall = _ARCHITECTURES[architecture]
+    # ALLOW leaves inherited filters in force. For an existing ERRNO denial,
+    # the newest filter supplies ENOSYS so libc can try the permitted pwrite64.
+    instructions = (_SockFilter * 7)(
+        _SockFilter(_BPF_LD_W_ABS, 0, 0, 4),
+        _SockFilter(_BPF_JMP_JEQ_K, 1, 0, audit_arch),
+        _SockFilter(_BPF_RET_K, 0, 0, _SECCOMP_RET_ALLOW),
+        _SockFilter(_BPF_LD_W_ABS, 0, 0, 0),
+        _SockFilter(_BPF_JMP_JEQ_K, 0, 1, syscall),
+        _SockFilter(_BPF_RET_K, 0, 0, _SECCOMP_RET_ERRNO | errno.ENOSYS),
+        _SockFilter(_BPF_RET_K, 0, 0, _SECCOMP_RET_ALLOW),
+    )
+    program = _SockFprog(len(instructions), instructions)
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.prctl.argtypes = [ctypes.c_int, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong]
+    libc.prctl.restype = ctypes.c_int
+    for arguments in (
+        (_PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0),
+        (_PR_SET_SECCOMP, _SECCOMP_MODE_FILTER, ctypes.addressof(program), 0, 0),
+    ):
+        if libc.prctl(*arguments) != 0:
+            code = ctypes.get_errno()
+            raise OSError(code, os.strerror(code))
+
+
+def enable_positional_write_compatibility():
+    """Enable an inherited ENOSYS fallback only when a positional write fails with EPERM."""
+    if sys.platform != "linux":
         return False
-    fu = meta.get("frozen_until")
-    if not fu:
+    try:
+        file = tempfile.TemporaryFile()
+    except OSError as exc:
+        print(f"Positional-write compatibility probe skipped: {exc}", file=sys.stderr, flush=True)
         return False
-    now = _now_ts()
-    if fu > now:
-        return True
-    meta["frozen_until"] = None
-    meta["bad_count"] = max(0, meta.get("bad_count", 0) - 1)
-    if meta["bad_count"] == 0:
-        _frozen.pop(url, None)
-    return False
-
-
-def get_current_frozen_set() -> Set[str]:
-    now = _now_ts()
-    res = set()
-    for url, meta in list(_frozen.items()):
-        fu = meta.get("frozen_until")
-        if fu and fu > now:
-            res.add(url)
+    with file:
+        try:
+            if os.pwrite(file.fileno(), b"probe", 0) != 5:
+                raise OSError(errno.EIO, "Positional-write probe returned a short write")
+        except OSError as exc:
+            if exc.errno != errno.EPERM:
+                print(f"Positional-write compatibility probe skipped: {exc}", file=sys.stderr, flush=True)
+                return False
         else:
-            is_url_frozen(url)
-    return res
+            return False
+        _install_write_fallback()
+        if os.pwrite(file.fileno(), b"probe", 0) != 5:
+            raise OSError(errno.EIO, "Positional-write compatibility verification failed")
+        file.seek(0)
+        if file.read() != b"probe":
+            raise OSError(errno.EIO, "Positional-write compatibility readback failed")
+    return True
 
 
-def load(path: Optional[str]) -> None:
-    if not path or not os.path.exists(path):
-        return
-    try:
-        with gzip.open(path, "rb") as f:
-            data = pickle.load(f)
-            if isinstance(data, dict):
-                for k, v in data.items():
-                    if k not in _frozen:
-                        _frozen[k] = v
-    except Exception:
-        pass
+def main():
+    if len(sys.argv) < 2:
+        raise SystemExit("Usage: python -m utils.docker_compat COMMAND [ARG ...]")
+    if enable_positional_write_compatibility():
+        print("Legacy positional-write compatibility enabled; inherited seccomp restrictions retained", file=sys.stderr, flush=True)
+    os.execvp(sys.argv[1], sys.argv[1:])
 
 
-def save(path: Optional[str]) -> None:
-    if not path:
-        return
-    try:
-        dirp = os.path.dirname(path)
-        if dirp:
-            os.makedirs(dirp, exist_ok=True)
-        with gzip.open(path, "wb") as f:
-            pickle.dump(_frozen, f)
-    except Exception:
-        pass
-
-
-__all__ = ["mark_url_bad", "mark_url_good", "is_url_frozen", "get_current_frozen_set", "load", "save"]
+if __name__ == "__main__":
+    main()

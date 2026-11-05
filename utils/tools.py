@@ -1,1500 +1,751 @@
-import copy
-import datetime
-import hashlib
-import io
-import ipaddress
-import json
-import logging
-import os
+import asyncio
+import http.cookies
 import re
-import shutil
-import sys
-import tempfile
-from collections import defaultdict
-from logging.handlers import RotatingFileHandler
-from pathlib import Path
+import socket
+from collections import deque
+from contextlib import asynccontextmanager
 from time import time
-from typing import Iterable, List, Optional, Union
-from urllib.parse import urlparse, urlunparse, unquote, quote
+from typing import Any
+from urllib.parse import quote, urljoin
 
-import pytz
-import requests
-from bs4 import BeautifulSoup
-from flask import send_file, make_response
-from opencc import OpenCC
+from aiohttp import ClientSession, ClientTimeout, TCPConnector
+import m3u8
 
 import utils.constants as constants
+from utils.channel_quality import is_channel_result_valid
 from utils.config import config
+from utils.ffmpeg import probe_url, ffmpeg_url
 from utils.i18n import t
-from utils.identity import stable_result_id
-from utils.types import ChannelData
-from utils.run_state import read_run_state
-from utils.resources import resource_path
+from utils.requests.tools import headers as request_headers
+from utils.tools import get_resolution_value
+from utils.types import TestResult, ChannelTestResult, TestResultCacheData
 
-opencc_t2s = OpenCC("t2s")
+http.cookies._is_legal_key = lambda _: True
+cache: TestResultCacheData = {}
+speed_test_timeout = config.speed_test_timeout
+speed_test_filter_host = config.speed_test_filter_host
+open_filter_resolution = config.open_filter_resolution
+min_resolution_value = config.min_resolution_value
+max_resolution_value = config.max_resolution_value
+open_supply = config.open_supply
+sort_by = config.sort_by
+open_filter_speed = config.open_filter_speed
+min_speed_value = config.min_speed
+resolution_speed_map = config.resolution_speed_map
+open_filter_ad = config.open_filter_ad
+m3u8_headers = ['application/x-mpegurl', 'application/vnd.apple.mpegurl', 'audio/mpegurl', 'audio/x-mpegurl']
+default_ipv6_delay = 0.1
+default_ipv6_resolution = "1920x1080"
+default_ipv6_result = {
+    'speed': float("inf"),
+    'delay': default_ipv6_delay,
+    'resolution': default_ipv6_resolution
+}
 
+min_measure_time = 1.0
+stability_window = 4
+stability_threshold = 0.12
+segment_sample_limit = 2
+playlist_max_bytes = 2 * 1024 * 1024
+stream_sample_max_bytes = 4 * 1024 * 1024
+stream_sample_max_seconds = 2.0
 
-def get_logger(path, level=logging.ERROR, init=False):
-    """
-    get the logger
-    """
-    dir_name = os.path.dirname(path) or "."
-    os.makedirs(dir_name, exist_ok=True)
-    os.makedirs(constants.output_dir, exist_ok=True)
-
-    logger = logging.getLogger(path)
-
-    if init:
-        for h in logger.handlers[:]:
-            try:
-                logger.removeHandler(h)
-                h.close()
-            except Exception:
-                pass
-
-        if os.path.exists(path):
-            try:
-                with open(path, "w", encoding="utf-8"):
-                    pass
-            except PermissionError:
-                pass
-            except Exception:
-                pass
-
-    handler = RotatingFileHandler(
-        path,
-        maxBytes=5 * 1024 * 1024,
-        backupCount=2,
-        encoding="utf-8",
-        delay=True,
-    )
-
-    abs_path = os.path.abspath(path)
-    if not any(
-            isinstance(h, RotatingFileHandler) and getattr(h, "baseFilename", None) == abs_path
-            for h in logger.handlers
-    ):
-        logger.addHandler(handler)
-
-    has_stream = any(isinstance(h, logging.StreamHandler) for h in logger.handlers)
-    if not has_stream:
-        try:
-            stream_handler = logging.StreamHandler(sys.stdout)
-            stream_handler.setLevel(level)
-            logger.addHandler(stream_handler)
-        except Exception:
-            pass
-
-    logger.setLevel(level)
-    return logger
+ad_filter_keywords = [
+    "no_signal",
+    "nosignal",
+    "no-signal",
+    "signal_offline",
+    "no_video",
+    "novideo",
+    "advertisement",
+    "advert",
+    "placeholder",
+    "default_video",
+    "cctv_off",
+    "/ad/",
+    "/ads/",
+]
+ad_max_loop_duration = 90
 
 
-def format_interval(t):
-    """
-    Formats a number of seconds as a clock time, [H:]MM:SS
-
-    Parameters
-    ----------
-    t  : int or float
-        Number of seconds.
-    Returns
-    -------
-    out  : str
-        [H:]MM:SS
-    """
-    mins, s = divmod(int(t), 60)
-    h, m = divmod(mins, 60)
-    if h:
-        return "{0:d}:{1:02d}:{2:02d}".format(h, m, s)
-    else:
-        return "{0:02d}:{1:02d}".format(m, s)
-
-
-def get_pbar_remaining(n=0, total=0, start_time=None):
-    """
-    Get the remaining time of the progress bar
-    """
-    try:
-        elapsed = time() - start_time
-        completed_tasks = n
-        if completed_tasks > 0:
-            avg_time_per_task = elapsed / completed_tasks
-            remaining_tasks = total - completed_tasks
-            remaining_time = format_interval(avg_time_per_task * remaining_tasks)
-        else:
-            remaining_time = "未知"
-        return remaining_time
-    except Exception as e:
-        print(f"Error: {e}")
-
-
-def update_file(final_file, old_file, copy=False):
-    """
-    Update the file
-    """
-    old_file_path = resource_path(old_file, persistent=True)
-    final_file_path = resource_path(final_file, persistent=True)
-    if os.path.exists(old_file_path):
-        if copy:
-            shutil.copyfile(old_file_path, final_file_path)
-        else:
-            os.replace(old_file_path, final_file_path)
-
-
-def filter_by_date(data):
-    """
-    Filter by date and limit
-    """
-    default_recent_days = 30
-    use_recent_days = config.recent_days
-    if not isinstance(use_recent_days, int) or use_recent_days <= 0:
-        use_recent_days = default_recent_days
-    start_date = datetime.datetime.now() - datetime.timedelta(days=use_recent_days)
-    recent_data = []
-    unrecent_data = []
-    for info, response_time in data:
-        item = (info, response_time)
-        date = info["date"]
-        if date:
-            date = datetime.datetime.strptime(date, "%m-%d-%Y")
-            if date >= start_date:
-                recent_data.append(item)
-            else:
-                unrecent_data.append(item)
-        else:
-            unrecent_data.append(item)
-    recent_data_len = len(recent_data)
-    if recent_data_len == 0:
-        recent_data = unrecent_data
-    elif recent_data_len < config.output_urls_limit:
-        recent_data.extend(unrecent_data[: config.output_urls_limit - len(recent_data)])
-    return recent_data
-
-
-def get_soup(source):
-    """
-    Get soup from source
-    """
-    source = re.sub(
-        r"<!--.*?-->",
-        "",
-        source,
-        flags=re.DOTALL,
-    )
-    soup = BeautifulSoup(source, "html.parser")
-    return soup
-
-
-def get_resolution_value(resolution_str):
-    """
-    Get resolution value from string
-    """
-    try:
-        if resolution_str:
-            pattern = r"(\d+)[xX*](\d+)"
-            match = re.search(pattern, resolution_str)
-            if match:
-                width, height = map(int, match.groups())
-                return width * height
-    except:
-        pass
-    return 0
-
-
-def get_total_urls(
-        info_list: list[ChannelData],
-        ipv_type_prefer,
-        origin_type_prefer,
-        rtmp_type=None,
-        apply_limit: bool = True,
-) -> list:
-    """
-    Get the total urls from info list
-    """
-    ipv_prefer_bool = bool(ipv_type_prefer)
-    origin_prefer_bool = bool(origin_type_prefer)
-    if not ipv_prefer_bool:
-        ipv_type_prefer = ["all"]
-    if not origin_prefer_bool:
-        origin_type_prefer = ["all"]
-    primary_urls = {origin: {ipv_type: [] for ipv_type in ipv_type_prefer} for origin in origin_type_prefer}
-    supply_urls = {origin: {ipv_type: [] for ipv_type in ipv_type_prefer} for origin in origin_type_prefer}
-    total_urls = []
-    for info in info_list:
-        channel_id, url, origin, resolution, url_ipv_type, extra_info = (
-            info["id"],
-            info["url"],
-            info["origin"],
-            info["resolution"],
-            info["ipv_type"],
-            info.get("extra_info", ""),
-        )
-        if not origin:
-            continue
-
-        if origin == "hls":
-            if not rtmp_type or (rtmp_type and origin in rtmp_type):
-                total_urls.append(info)
-                continue
-            else:
-                continue
-
-        if origin == "whitelist":
-            total_urls.append(info)
-            continue
-
-        if origin_prefer_bool and (origin not in origin_type_prefer):
-            continue
-
-        if not extra_info:
-            info["extra_info"] = constants.origin_map[origin]
-
-        if not origin_prefer_bool:
-            origin = "all"
-
-        categorized_urls = supply_urls if info.get("supply") else primary_urls
-        if ipv_prefer_bool:
-            if url_ipv_type in ipv_type_prefer:
-                categorized_urls[origin][url_ipv_type].append(info)
-        else:
-            categorized_urls[origin]["all"].append(info)
-
-    urls_limit = config.output_urls_limit if apply_limit else None
-
-    def fill_urls(categorized):
-        for origin in origin_type_prefer:
-            if urls_limit is not None and len(total_urls) >= urls_limit:
-                break
-            for ipv_type in ipv_type_prefer:
-                if urls_limit is not None and len(total_urls) >= urls_limit:
-                    break
-                urls = categorized[origin].get(ipv_type, [])
-                if not urls:
-                    continue
-                if urls_limit is None:
-                    total_urls.extend(urls)
-                else:
-                    remaining = urls_limit - len(total_urls)
-                    total_urls.extend(urls[:remaining])
-
-    fill_urls(primary_urls)
-    fill_urls(supply_urls)
-
-    if urls_limit is not None:
-        total_urls = total_urls[:urls_limit]
-
-    return total_urls
-
-
-def get_total_urls_from_sorted_data(data):
-    """
-    Get the total urls with filter by date and duplicate from sorted data
-    """
-    if len(data) > config.output_urls_limit:
-        total_urls = [channel_data["url"] for channel_data, _ in filter_by_date(data)]
-    else:
-        total_urls = [channel_data["url"] for channel_data, _ in data]
-    return list(dict.fromkeys(total_urls))[: config.output_urls_limit]
-
-
-def check_ipv6_support():
-    """
-    Check if the system network supports ipv6
-    """
-    if os.getenv("GITHUB_ACTIONS"):
+def _is_aiohttp_dns_shield_error(context: dict) -> bool:
+    exception = context.get("exception")
+    if not isinstance(exception, socket.gaierror):
         return False
-    url = "https://ipv6.tokyo.test-ipv6.com/ip/?callback=?&testdomain=test-ipv6.com&testname=test_aaaa"
+    if context.get("message") != "gaierror exception in shielded future":
+        return False
+    future = context.get("future")
+    get_coro = getattr(future, "get_coro", None)
+    if not callable(get_coro):
+        return False
+    coro = get_coro()
+    return getattr(coro, "__qualname__", "").endswith(
+        "TCPConnector._resolve_host_with_throttle"
+    )
+
+
+def _install_aiohttp_dns_error_filter() -> None:
+    loop = asyncio.get_running_loop()
+    previous_handler = loop.get_exception_handler()
+    if getattr(previous_handler, "_filters_aiohttp_dns_shield_errors", False):
+        return
+
+    def handle_exception(active_loop, context):
+        if _is_aiohttp_dns_shield_error(context):
+            return
+        if previous_handler is not None:
+            previous_handler(active_loop, context)
+        else:
+            active_loop.default_exception_handler(context)
+
+    handle_exception._filters_aiohttp_dns_shield_errors = True
+    loop.set_exception_handler(handle_exception)
+
+
+def create_speed_test_session(concurrency: int):
+    limit = max(1, int(concurrency or 1))
+    _install_aiohttp_dns_error_filter()
+    return ClientSession(
+        connector=TCPConnector(ssl=False, limit=limit, limit_per_host=min(2, limit), ttl_dns_cache=300),
+        timeout=ClientTimeout(total=None),
+        trust_env=False,
+    )
+
+
+@asynccontextmanager
+async def _limit(semaphore):
+    if semaphore is None:
+        yield
+        return
+    async with semaphore:
+        yield
+
+
+@asynccontextmanager
+async def _session(session, concurrency: int = 1):
+    if session is not None:
+        yield session
+        return
+    async with create_speed_test_session(concurrency) as created_session:
+        yield created_session
+
+
+async def get_speed_with_download(url: str, headers: dict = None, session: Any = None,
+                                  timeout: int = speed_test_timeout, semaphore=None,
+                                  max_bytes: int | None = None,
+                                  max_duration: float | None = None) -> dict[str, float | None]:
+    """
+    Get the speed of the url with a total timeout
+    """
+    start_time = time()
+    delay = -1
+    total_size = 0
+    min_bytes = 64 * 1024
+    last_sample_time = start_time
+    last_sample_size = 0
+    max_bytes = stream_sample_max_bytes if max_bytes is None else max_bytes
+    max_duration = stream_sample_max_seconds if max_duration is None else max_duration
+    request_timeout = min(timeout, max_duration) if max_duration else timeout
+
+    if session is None:
+        session = ClientSession(connector=TCPConnector(ssl=False), trust_env=False)
+        created_session = True
+    else:
+        created_session = False
+
+    speed_samples = deque(maxlen=stability_window)
     try:
-        print(t("msg.check_ipv6_support"))
-        response = requests.get(url, timeout=10)
-        if response.status_code == 200:
-            print(t("msg.ipv6_supported"))
-            return True
+        async with _limit(semaphore):
+            start_time = time()
+            last_sample_time = start_time
+            async with session.get(url, headers=headers, timeout=request_timeout) as response:
+                if response.status != 200:
+                    raise Exception("Invalid response")
+                delay = int(round((time() - start_time) * 1000))
+                async for chunk in response.content.iter_chunked(64 * 1024):
+                    if chunk:
+                        total_size += len(chunk)
+                        now = time()
+                        elapsed = now - start_time
+                        delta_t = now - last_sample_time
+                        delta_b = total_size - last_sample_size
+                        if delta_t > 0 and delta_b > 0:
+                            inst_speed = delta_b / delta_t / 1024.0 / 1024.0
+                            speed_samples.append(inst_speed)
+                            last_sample_time = now
+                            last_sample_size = total_size
+                        if (max_bytes and total_size >= max_bytes) or (
+                                max_duration and elapsed >= max_duration
+                        ):
+                            return {
+                                'speed': total_size / elapsed / 1024 / 1024 if elapsed > 0 else 0.0,
+                                'delay': delay,
+                                'size': total_size,
+                                'time': elapsed,
+                            }
+                        if (elapsed >= min_measure_time and total_size >= min_bytes
+                                and len(speed_samples) >= stability_window):
+                            mean = sum(speed_samples) / len(speed_samples)
+                            if mean > 0 and (max(speed_samples) - min(speed_samples)) / mean < stability_threshold:
+                                total_time = elapsed
+                                return {
+                                    'speed': total_size / total_time / 1024 / 1024,
+                                    'delay': delay,
+                                    'size': total_size,
+                                    'time': total_time,
+                                }
+    except asyncio.CancelledError:
+        raise
     except Exception:
         pass
-    print(t("msg.ipv6_not_supported"))
+    finally:
+        if created_session:
+            await session.close()
+    total_time = time() - start_time
+    speed_value = total_size / total_time / 1024 / 1024 if total_time > 0 else 0.0
+    return {
+        'speed': speed_value,
+        'delay': delay,
+        'size': total_size,
+        'time': total_time,
+    }
+
+
+async def get_headers(url: str, headers: dict = None, session: Any = None, timeout: int = 3,
+                      semaphore=None) -> dict:
+    """
+    Get the headers of the url
+    """
+    if session is None:
+        session = ClientSession(connector=TCPConnector(ssl=False), trust_env=False)
+        created_session = True
+    else:
+        created_session = False
+    res_headers = {}
+    try:
+        async with _limit(semaphore):
+            async with session.head(url, headers=headers, timeout=timeout, allow_redirects=False) as response:
+                res_headers = dict(response.headers)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        pass
+    finally:
+        if created_session:
+            await session.close()
+    return res_headers
+
+
+async def get_url_content(url: str, headers: dict = None, session: Any = None,
+                          timeout: int = speed_test_timeout, semaphore=None) -> str:
+    """
+    Get the content of the url
+    """
+    if session is None:
+        session = ClientSession(connector=TCPConnector(ssl=False), trust_env=False)
+        created_session = True
+    else:
+        created_session = False
+    content = ""
+    try:
+        async with _limit(semaphore):
+            async with session.get(url, headers=headers, timeout=timeout) as response:
+                if response.status == 200:
+                    payload = await response.content.read(playlist_max_bytes + 1)
+                    if len(payload) > playlist_max_bytes:
+                        raise Exception("Response too large")
+                    content = payload.decode(response.charset or "utf-8", errors="replace")
+                else:
+                    raise Exception("Invalid response")
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        pass
+    finally:
+        if created_session:
+            await session.close()
+    return content
+
+
+def check_m3u8_valid(headers: dict) -> bool:
+    """
+    Check if the m3u8 url is valid
+    """
+    content_type = headers.get('Content-Type', '').lower()
+    if not content_type:
+        return False
+    return any(item in content_type for item in m3u8_headers)
+
+
+def is_ad_playlist(media_playlist, base_url: str = "") -> bool:
+    segments = getattr(media_playlist, "segments", None)
+    if not segments:
+        return False
+    haystack = (base_url + " " + " ".join(segment.uri or "" for segment in segments)).lower()
+    if any(keyword in haystack for keyword in ad_filter_keywords):
+        return True
+    if getattr(media_playlist, "is_endlist", False):
+        total_duration = sum(segment.duration or 0 for segment in segments)
+        if 0 < total_duration <= ad_max_loop_duration:
+            return True
     return False
 
 
-def check_ipv_type_match(ipv_type: str) -> bool:
+def _parse_time_to_seconds(t: str) -> float:
     """
-    Check if the ipv type matches
+    Parse time string to seconds
     """
-    config_ipv_type = config.ipv_type
-    return config_ipv_type == ipv_type or config_ipv_type == "all"
+    if not t:
+        return 0.0
+    parts = [p.strip() for p in t.split(':') if p.strip() != ""]
+    if not parts:
+        return 0.0
+    try:
+        total = 0.0
+        for i, part in enumerate(reversed(parts)):
+            total += float(part) * (60 ** i)
+        return total
+    except Exception:
+        return 0.0
 
 
-def check_url_by_keywords(url, keywords=None):
+async def get_result(url: str, headers: dict = None, resolution: str = None,
+                     filter_resolution: bool = config.open_filter_resolution,
+                     timeout: int = speed_test_timeout, session: Any = None,
+                     http_semaphore=None, probe_semaphore=None,
+                     redirects_remaining: int = 5) -> dict[str, float | None]:
     """
-    Check by URL keywords
+    Get the test result of the url
     """
-    if not keywords:
-        return False
-    else:
-        return any(keyword in url for keyword in keywords)
-
-
-def merge_objects(*objects, match_key=None):
-    """
-    Merge objects while preserving defaultdict types (including default_factory).
-    Args:
-        *objects: Dictionaries to merge
-        match_key: If dict1[key] is a list of dicts, this key will be used to match and merge dicts
-    """
-
-    def clone_empty(value):
-        """
-        Return an empty container of the same *container* type as value,
-        preserving defaultdict default_factory when applicable.
-        """
-        if isinstance(value, defaultdict):
-            return defaultdict(value.default_factory)
-        if isinstance(value, dict):
-            return {}
-        if isinstance(value, list):
-            return []
-        if isinstance(value, set):
-            return set()
-        try:
-            return copy.copy(value)
-        except Exception:
-            return value
-
-    def merge_dicts(dict1, dict2):
-        for key, value in dict2.items():
-            if key in dict1:
-                if isinstance(dict1[key], dict) and isinstance(value, dict):
-                    merge_dicts(dict1[key], value)
-                elif isinstance(dict1[key], set) and isinstance(value, (set, list)):
-                    dict1[key].update(value)
-                elif isinstance(dict1[key], list) and isinstance(value, list):
-                    if match_key and all(isinstance(x, dict) for x in dict1[key] + value):
-                        existing_items = {item.get(match_key): item for item in dict1[key] if match_key in item}
-                        for new_item in value:
-                            if match_key in new_item and new_item[match_key] in existing_items:
-                                merge_dicts(existing_items[new_item[match_key]], new_item)
-                            else:
-                                dict1[key].append(new_item)
-                    else:
-                        for x in value:
-                            if x not in dict1[key]:
-                                dict1[key].append(x)
-                elif value != dict1[key]:
-                    dict1[key] = copy.deepcopy(value)
+    info = {'speed': 0.0, 'delay': -1, 'resolution': resolution}
+    location = None
+    segment_urls = []
+    try:
+        url = quote(url, safe=':/?$&=@[]%').partition('$')[0]
+        async with _session(session) as active_session:
+            res_headers = await get_headers(url, headers, active_session, semaphore=http_semaphore)
+            location = res_headers.get('Location') if res_headers else None
+            if location:
+                if redirects_remaining <= 0:
+                    raise Exception("Too many redirects")
+                info.update(await get_result(
+                    urljoin(url, location),
+                    headers,
+                    resolution,
+                    filter_resolution,
+                    timeout,
+                    session=active_session,
+                    http_semaphore=http_semaphore,
+                    probe_semaphore=probe_semaphore,
+                    redirects_remaining=redirects_remaining - 1,
+                ))
             else:
-                if isinstance(value, dict):
-                    dict1[key] = clone_empty(value)
-                    merge_dicts(dict1[key], value)
+                should_parse_m3u8 = ".m3u8" in url.lower() or check_m3u8_valid(res_headers)
+                if should_parse_m3u8:
+                    url_content = await get_url_content(
+                        url, headers, active_session, timeout, semaphore=http_semaphore
+                    )
                 else:
-                    dict1[key] = copy.deepcopy(value)
-
-    if not objects:
-        return {}
-
-    for obj in objects:
-        if not isinstance(obj, dict):
-            raise TypeError("All input objects must be dictionaries")
-
-    first_obj = objects[0]
-    if isinstance(first_obj, defaultdict):
-        merged_dict = defaultdict(first_obj.default_factory)
-    else:
-        merged_dict = {}
-
-    for obj in objects:
-        merge_dicts(merged_dict, obj)
-
-    return merged_dict
-
-
-def get_public_url(port: int | None = None) -> str:
-    if port is None and config.public_url:
-        return config.public_url
-    port = config.public_port if port is None else port
-    host = config.public_domain
-    scheme = config.public_scheme
-    default_port = 80 if scheme == 'http' else 443
-    port_part = f":{port}" if port != default_port else ""
-    return f"{scheme}://{host}{port_part}"
-
-
-def get_epg_url():
-    """
-    Get the epg result url
-    """
-    artifact_base_url = os.getenv("IPTV_API_ARTIFACT_BASE_URL", "").strip()
-    if artifact_base_url:
-        return f"{artifact_base_url.rstrip('/')}/epg.gz"
-    if os.getenv("GITHUB_ACTIONS"):
-        repository = os.getenv("GITHUB_REPOSITORY", "Guovin/iptv-api")
-        ref = os.getenv("GITHUB_REF", "gd")
-        return join_url(config.cdn_url, f"https://raw.githubusercontent.com/{repository}/{ref}/output/epg/epg.gz")
-    else:
-        return f"{get_public_url()}/epg/epg.gz"
-
-
-def get_logo_url():
-    """
-    Get the logo url
-    """
-    logo_url = join_url(config.cdn_url,
-                        config.logo_url) if "raw.githubusercontent.com" in config.logo_url else config.logo_url
-    if not logo_url:
-        logo_url = f"{get_public_url()}/logo/"
-    return logo_url
-
-
-def get_channel_epg_id(name: str | None) -> str:
-    """
-    Get a stable channel id shared by generated M3U tvg-id and EPG channel id.
-    """
-    if not name:
-        return ""
-
-    from utils.channel import channel_alias
-
-    return channel_alias.get_primary(name)
-
-
-def convert_to_m3u(path=None, first_channel_name=None, data=None, content=None):
-    """
-    Convert result txt to m3u format
-    """
-    if content is not None or os.path.exists(path):
-        source = io.StringIO(content) if content is not None else open(path, "r", encoding="utf-8")
-        with source as file:
-            m3u_output = f'#EXTM3U x-tvg-url="{get_epg_url()}"\n' if config.open_epg else "#EXTM3U\n"
-            current_group = None
-            logo_url = get_logo_url()
-            from_fanmingming = "https://raw.githubusercontent.com/fanmingming/live/main/tv" in logo_url
-            data_positions = defaultdict(int)
-            for line in file:
-                trimmed_line = line.strip()
-                if trimmed_line != "":
-                    if "#genre#" in trimmed_line:
-                        current_group = trimmed_line.replace(",#genre#", "").strip()
+                    url_content = ""
+                if should_parse_m3u8 and url_content:
+                    m3u8_obj = m3u8.loads(url_content)
+                    playlists = m3u8_obj.playlists
+                    segments = m3u8_obj.segments
+                    if playlists:
+                        best_playlist = max(m3u8_obj.playlists, key=lambda p: p.stream_info.bandwidth or 0)
+                        stream_resolution = getattr(best_playlist.stream_info, "resolution", None)
+                        if stream_resolution and len(stream_resolution) == 2:
+                            info['resolution'] = f"{stream_resolution[0]}x{stream_resolution[1]}"
+                        stream_frame_rate = getattr(best_playlist.stream_info, "frame_rate", None)
+                        if stream_frame_rate:
+                            info['fps'] = stream_frame_rate
+                        playlist_url = urljoin(url, best_playlist.uri)
+                        playlist_content = await get_url_content(
+                            playlist_url, headers, active_session, timeout, semaphore=http_semaphore
+                        )
+                        if playlist_content:
+                            media_playlist = m3u8.loads(playlist_content)
+                            if open_filter_ad and is_ad_playlist(media_playlist, playlist_url):
+                                raise Exception("Ad source filtered")
+                            segment_urls = [urljoin(playlist_url, segment.uri) for segment in media_playlist.segments]
                     else:
-                        try:
-                            original_channel_name, _, channel_link = map(
-                                str.strip, trimmed_line.partition(",")
-                            )
-                        except:
-                            continue
-                        use_name = first_channel_name if current_group in (t("content.update_time"),
-                                                                           t("content.update_running")) else original_channel_name
-                        processed_channel_name = use_name
-                        if from_fanmingming:
-                            processed_channel_name = re.sub(
-                                r"(CCTV|CETV)-(\d+)(\+.*)?",
-                                lambda m: f"{m.group(1)}{m.group(2)}"
-                                          + ("+" if m.group(3) else ""),
-                                use_name,
-                            )
-                        tvg_id = get_channel_epg_id(use_name) or processed_channel_name
-
-                        item_data = {}
-                        if data:
-                            item_list = data.get(original_channel_name, [])
-                            item_position = data_positions[original_channel_name]
-                            if item_position < len(item_list):
-                                item_data = item_list[item_position]
-                                data_positions[original_channel_name] = item_position + 1
-                        channel_logo = ""
-                        if config.open_subscribe_logo and item_data:
-                            channel_logo = item_data.get("tvg_logo") or ""
-                        if not channel_logo:
-                            channel_logo = join_url(logo_url, f"{processed_channel_name}.{config.logo_type}")
-
-                        m3u_output += f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{processed_channel_name}" tvg-logo="{channel_logo}"'
-                        if current_group:
-                            m3u_output += f' group-title="{current_group}"'
-                        if item_data:
-                            catchup = item_data.get("catchup")
-                            if catchup:
-                                for key, value in catchup.items():
-                                    m3u_output += f' {key}="{value}"'
-                        m3u_output += f",{original_channel_name}\n"
-                        item_headers = dict(item_data.get("headers") or {}) if item_data else {}
-                        if config.user_agent and "User-Agent" not in item_headers:
-                            item_headers["User-Agent"] = config.user_agent
-                        for key, value in item_headers.items():
-                            m3u_output += f"#EXTVLCOPT:http-{key.lower()}={value}\n"
-                        m3u_output += f"{channel_link}\n"
-            m3u_file_path = os.path.splitext(path)[0] + ".m3u"
-            target_dir = os.path.dirname(m3u_file_path) or "."
-            with tempfile.NamedTemporaryFile(
-                    mode="w", encoding="utf-8", delete=False, dir=target_dir,
-                    prefix=os.path.basename(m3u_file_path) + ".tmp.") as m3u_file:
-                m3u_file.write(m3u_output)
-                tmp_path = m3u_file.name
-            os.replace(tmp_path, m3u_file_path)
-
-
-def get_result_file_content(path=None, show_content=False, file_type=None):
-    """
-    Get the content of the result file
-    """
-    requested_type = file_type.lower() if isinstance(file_type, str) else file_type
-    if requested_type is None and config.open_m3u_result:
-        requested_type = "m3u"
-    result_file = (
-        os.path.splitext(path)[0] + f".{requested_type}"
-        if requested_type
-        else path
+                        if open_filter_ad and is_ad_playlist(m3u8_obj, url):
+                            raise Exception("Ad source filtered")
+                        segment_urls = [urljoin(url, segment.uri) for segment in segments]
+                    if not segment_urls:
+                        raise Exception("Segment urls not found")
+                else:
+                    res_info = await get_speed_with_download(
+                        url, headers, active_session, timeout, semaphore=http_semaphore
+                    )
+                    info.update({'speed': res_info['speed'], 'delay': res_info['delay']})
+                if segment_urls:
+                    sampled_segment_urls = segment_urls[-(segment_sample_limit + 1):-1]
+                    if not sampled_segment_urls:
+                        sampled_segment_urls = segment_urls[-segment_sample_limit:]
+                    tasks = [
+                        get_speed_with_download(
+                            ts_url,
+                            headers,
+                            active_session,
+                            timeout,
+                            semaphore=http_semaphore,
+                        )
+                        for ts_url in sampled_segment_urls
+                    ]
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
+                    valid_results = [
+                        result for result in results
+                        if isinstance(result, dict) and result.get('size') and result.get('time')
+                    ]
+                    total_size = sum(result['size'] for result in valid_results)
+                    total_time = sum(result['time'] for result in valid_results)
+                    info['speed'] = total_size / total_time / 1024 / 1024 if total_time > 0 else 0
+                    delays = [result['delay'] for result in valid_results if result.get('delay', -1) >= 0]
+                    info['delay'] = int(sum(delays) / len(delays)) if delays else -1
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        pass
+    probe_speed_threshold = min(
+        [min_speed_value, *resolution_speed_map.values()],
+        default=min_speed_value,
     )
-    if os.path.isfile(result_file) and os.path.getsize(result_file) > 0:
-        extension = os.path.splitext(result_file)[1].lower()
-        if extension == ".gz" or (
-                not show_content
-                and requested_type not in {None, "txt"}
-        ):
-            return send_file(resource_path(result_file), as_attachment=True)
-        with open(result_file, "r", encoding="utf-8") as file:
-            content = file.read()
+    should_probe = open_supply or not open_filter_speed or (info.get('speed') or 0) >= probe_speed_threshold
+    if (filter_resolution and should_probe and not location
+            and not info.get('resolution') and info.get('delay') != -1):
+        try:
+            async with _limit(probe_semaphore):
+                probed = await probe_url(url, headers, timeout=timeout)
+            if probed:
+                info['resolution'] = probed.get('resolution')
+                info['fps'] = probed.get('fps')
+                info['video_codec'] = probed.get('video_codec')
+                info['audio_codec'] = probed.get('audio_codec')
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            pass
+    return info
+
+
+async def get_delay_requests(url, timeout=speed_test_timeout, proxy=None):
+    """
+    Get the delay of the url by requests
+    """
+    async with ClientSession(
+            connector=TCPConnector(ssl=False), trust_env=False
+    ) as session:
+        start = time()
+        end = None
+        try:
+            async with session.get(url, timeout=timeout, proxy=proxy) as response:
+                if response.status == 404:
+                    return -1
+                content = await response.read()
+                if content:
+                    end = time()
+                else:
+                    return -1
+        except Exception as e:
+            return -1
+        return int(round((end - start) * 1000)) if end else -1
+
+
+def get_video_info(video_info):
+    """
+    Get the video info from ffmpeg stderr and return a dict with keys:
+      - resolution: str or None (e.g. '1280x720')
+      - fps: float or None
+      - video_codec: str or None
+      - audio_codec: str or None
+      - speed: float or None
+    """
+    resolution = None
+    fps = None
+    video_codec = None
+    audio_codec = None
+    if video_info is not None:
+        match = re.search(r"(\d{3,4}x\d{3,4})", video_info)
+        if match:
+            resolution = match.group(0)
+        m_fps = re.search(r"(\d+(?:\.\d+)?)\s*fps", video_info, re.IGNORECASE)
+        if not m_fps:
+            m_fps = re.search(r"(\d+(?:\.\d+)?)\s*tbr", video_info, re.IGNORECASE)
+        if not m_fps:
+            m_fps = re.search(r"(\d+(?:\.\d+)?)\s*tbn", video_info, re.IGNORECASE)
+        if m_fps:
+            try:
+                fps = float(m_fps.group(1))
+            except Exception:
+                fps = None
+        m_vc = re.search(r"Video:\s*([^,\n\r(]+)", video_info, re.IGNORECASE)
+        if m_vc:
+            vc = m_vc.group(1).strip()
+            vc = vc.split(',')[0].split()[0]
+            if vc:
+                video_codec = vc
+        m_ac = re.search(r"Audio:\s*([^,\n\r(]+)", video_info, re.IGNORECASE)
+        if m_ac:
+            ac = m_ac.group(1).strip()
+            ac = ac.split(',')[0].split()[0]
+            if ac:
+                audio_codec = ac
+
+    def parse_size_value(value_str: str, unit: str | None) -> float:
+        try:
+            val = float(value_str)
+        except Exception:
+            return 0.0
+        if not unit:
+            return val
+        unit_lower = unit.lower()
+        if unit_lower in ("b", "bytes"):
+            return val
+        if unit_lower in ("kib", "k"):
+            return val * 1024.0
+        if unit_lower in ("kb",):
+            return val * 1000.0
+        if unit_lower in ("mib", "mb"):
+            return val * 1024.0 * 1024.0
+        return val
+
+    speed_val = None
+    try:
+        total_bytes = 0.0
+        m_video_size = re.search(r"video:\s*([0-9]+(?:\.[0-9]+)?)\s*(KiB|MiB|kB|B|kb|KB)?", video_info, re.IGNORECASE)
+        m_audio_size = re.search(r"audio:\s*([0-9]+(?:\.[0-9]+)?)\s*(KiB|MiB|kB|B|kb|KB)?", video_info, re.IGNORECASE)
+        if m_video_size:
+            total_bytes += parse_size_value(m_video_size.group(1), m_video_size.group(2))
+        if m_audio_size:
+            total_bytes += parse_size_value(m_audio_size.group(1), m_audio_size.group(2))
+
+        m_time = re.search(r"time=\s*([0-9:.]+)", video_info)
+        if total_bytes > 0 and m_time:
+            secs = _parse_time_to_seconds(m_time.group(1))
+            if secs > 0:
+                speed_val = total_bytes / secs / 1024.0 / 1024.0
+    except Exception:
+        pass
+
+    if speed_val is None:
+        try:
+            m_lsize = re.search(r"Lsize=\s*([0-9]+(?:\.[0-9]+)?)\s*(KiB|kB|MiB|B|kb|KB)?", video_info, re.IGNORECASE)
+            m_size = re.search(r"size=\s*([0-9]+(?:\.[0-9]+)?)\s*(KiB|kB|MiB|B|kb|KB)?", video_info, re.IGNORECASE)
+            m_time = re.search(r"time=\s*([0-9:.]+)", video_info)
+            size_bytes = 0.0
+            if m_lsize and m_lsize.group(1).upper() != "N/A":
+                size_bytes = parse_size_value(m_lsize.group(1), m_lsize.group(2))
+            elif m_size:
+                size_bytes = parse_size_value(m_size.group(1), m_size.group(2))
+            if size_bytes > 0 and m_time:
+                secs = _parse_time_to_seconds(m_time.group(1))
+                if secs > 0:
+                    speed_val = size_bytes / secs / 1024.0 / 1024.0
+        except Exception:
+            pass
+
+    if speed_val is None:
+        try:
+            m_bitrate = re.search(r"bitrate=\s*([0-9.]+)\s*k?bits/s", video_info)
+            if m_bitrate:
+                kbps = float(m_bitrate.group(1))
+                speed_val = kbps / 8.0 / 1024.0
+        except Exception:
+            pass
+
+    return {
+        'resolution': resolution,
+        'fps': fps,
+        'video_codec': video_codec,
+        'audio_codec': audio_codec,
+        'speed': speed_val,
+    }
+
+
+def sample_segment_urls(segment_urls: list, limit: int) -> list:
+    """
+    Sample up to `limit` segment URLs from `segment_urls` evenly across the playlist.
+    If `limit` >= len(segment_urls) the original list is returned.
+    """
+    if not segment_urls:
+        return []
+    try:
+        limit = int(limit) if limit is not None else 0
+    except Exception:
+        limit = 0
+    total = len(segment_urls)
+    if limit <= 0 or limit >= total:
+        return list(segment_urls)
+    if limit == 1:
+        return [segment_urls[total // 2]]
+    indices = []
+    for i in range(limit):
+        idx = round(i * (total - 1) / (limit - 1))
+        indices.append(idx)
+    seen = set()
+    sampled = []
+    for idx in indices:
+        if idx < 0:
+            idx = 0
+        if idx >= total:
+            idx = total - 1
+        if idx not in seen:
+            seen.add(idx)
+            sampled.append(segment_urls[idx])
+    return sampled
+
+
+def get_avg_result(result) -> TestResult:
+    delays = [item.get('delay') for item in result if isinstance(item.get('delay'), (int, float)) and item['delay'] >= 0]
+    resolutions = [item.get('resolution') for item in result if item.get('resolution')]
+    best = max(result, key=lambda item: item.get('speed') or 0)
+    averaged = {
+        'speed': sum(item.get('speed') or 0 for item in result) / len(result),
+        'delay': int(sum(delays) / len(delays)) if delays else -1,
+        'resolution': max(resolutions, key=get_resolution_value) if resolutions else None,
+    }
+    for key in ('fps', 'video_codec', 'audio_codec'):
+        if best.get(key) is not None:
+            averaged[key] = best[key]
+    return averaged
+
+
+def get_speed_result(key: str) -> TestResult:
+    """
+    Get the speed result of the url
+    """
+    if key in cache:
+        return get_avg_result(cache[key])
     else:
-        state = read_run_state()
-        status = state.get("status", "never_run")
-        response = make_response(json.dumps({
-            "status": status,
-            "message": t({
-                "never_run": "msg.result_empty_never",
-                "running": "msg.result_empty_running",
-                "completed_empty": "msg.result_empty_after_run",
-                "failed": "msg.result_empty_failed",
-                "cancelled": "msg.result_empty_cancelled",
-            }.get(status, "msg.result_empty")),
-        }, ensure_ascii=False), {
-            "never_run": 404,
-            "running": 202,
-            "completed_empty": 404,
-            "failed": 503,
-            "cancelled": 409,
-        }.get(status, 404))
-        response.mimetype = "application/json"
-        return response
-    response = make_response(content)
-    response.mimetype = 'text/plain'
-    return response
+        return {'speed': 0, 'delay': -1, 'resolution': None}
 
 
-def remove_duplicates_from_list(data_list, seen, filter_host=False, ipv6_support=True):
+def invalidate_speed_cache(data: dict) -> None:
+    for key in {data.get("url"), data.get("host")}:
+        if key:
+            cache.pop(key, None)
+
+
+async def get_speed(data, headers=None, ipv6_proxy=None, filter_resolution=open_filter_resolution,
+                    timeout=speed_test_timeout, logger=None, callback=None, session: Any = None,
+                    http_semaphore=None, probe_semaphore=None) -> TestResult:
     """
-    Remove duplicates from data list
+    Get the speed (response time and resolution) of the url
     """
-    unique_list = []
-    for item in data_list:
-        if item["origin"] in ["whitelist", "hls"]:
-            continue
-        if not ipv6_support and item["ipv_type"] == "ipv6":
-            continue
-        part = (
-            item["host"]
-            if filter_host
-            else stable_result_id(item["url"], item.get("headers"))
-        )
-        if part not in seen:
-            seen.add(part)
-            unique_list.append(item)
-    return unique_list
-
-
-def process_nested_dict(data, seen, filter_host=False, ipv6_support=True):
-    """
-    Process nested dict
-    """
-    for key, value in data.items():
-        if isinstance(value, dict):
-            process_nested_dict(value, seen, filter_host, ipv6_support)
-        elif isinstance(value, list):
-            data[key] = remove_duplicates_from_list(value, seen, filter_host, ipv6_support)
-
-
-def get_url_host(url):
-    """
-    Get the url host
-    """
-    matcher = constants.url_host_pattern.search(url)
-    if matcher:
-        return matcher.group()
-    return None
-
-
-def add_url_info(url, info):
-    """
-    Add url info to the URL
-    """
-    if info:
-        separator = "-" if "$" in url else "$"
-        url += f"{separator}{info}"
-    return url
-
-
-def format_url_with_cache(url, cache=None):
-    """
-    Format the URL with cache
-    """
-    cache = cache or get_url_host(url) or ""
-    return add_url_info(url, f"cache:{cache}") if cache else url
-
-
-def remove_cache_info(string):
-    """
-    Remove the cache info from the string
-    """
-    return re.sub(r"[.*]?\$?-?cache:.*", "", string)
-
-
-def write_content_into_txt(content, path=None, position=None, callback=None):
-    """
-    Write content into txt file
-    """
-    if not path:
-        return
-
-    mode = "r+" if position == "top" else "a"
-    with open(path, mode, encoding="utf-8") as f:
-        if position == "top":
-            existing_content = f.read()
-            f.seek(0, 0)
-            f.write(f"{content}\n{existing_content}")
+    url = data['url']
+    resolution = data['resolution']
+    result: TestResult = {'speed': 0, 'delay': -1, 'resolution': resolution}
+    headers = {**request_headers, **(headers or {})}
+    try:
+        cache_key = data['host'] if speed_test_filter_host else url
+        if cache_key and cache_key in cache:
+            result = get_avg_result(cache[cache_key])
         else:
-            f.write(content)
-
-    if callback:
-        callback()
-
-
-def format_name(name: str) -> str:
-    """
-    Format the  name with sub and replace and lower
-    """
-    name = opencc_t2s.convert(name)
-    # Preserve regional time-shift suffixes such as "(+4)" before the
-    # generic parenthetical-noise cleanup. Otherwise NTV(+4) collapses to NTV.
-    name = re.sub(r"[（(]\s*\+(\d+)\s*[）)]", r"+\1", name)
-    name = constants.sub_pattern.sub("", name)
-    for old, new in constants.replace_dict.items():
-        name = name.replace(old, new)
-    return name.lower()
-
-
-def get_headers_key_value(content: str) -> dict:
-    """
-    Get the headers key value from content
-    """
-    key_value = {}
-    for match in constants.key_value_pattern.finditer(content):
-        key = match.group("key").strip().replace("http-", "").replace("-", "").lower()
-        if "refer" in key:
-            key = "referer"
-        value = match.group("value").replace('"', "").strip()
-        if key and value:
-            key_value[key] = value
-    return key_value
-
-
-def get_m3u_epg_urls(content: str) -> list[str]:
-    """
-    Extract EPG urls declared in the m3u #EXTM3U header (url-tvg / x-tvg-url).
-    """
-    urls = []
-    for line in content.splitlines():
-        stripped = line.strip()
-        if not stripped.startswith("#EXTM3U"):
-            continue
-        attributes = get_headers_key_value(stripped[len("#EXTM3U"):])
-        for key in ("urltvg", "xtvgurl"):
-            for url in attributes.get(key, "").split(","):
-                url = url.strip()
-                if url.startswith(("http://", "https://")) and url not in urls:
-                    urls.append(url)
-        break
-    return urls
-
-
-def get_name_value(content, pattern, open_headers=False, check_value=True):
-    """
-    Extract name and value from content using a regex pattern.
-    :param content: str, the input content to search.
-    :param pattern: re.Pattern, the compiled regex pattern to match.
-    :param open_headers: bool, whether to extract headers.
-    :param check_value: bool, whether to validate the presence of a URL.
-    """
-    result = []
-
-    def append_item(name, value, attributes):
-        if not name or (check_value and not value):
-            return
-        headers = {
-            "User-Agent": attributes.get("useragent", ""),
-            "Referer": attributes.get("referer", ""),
-            "Origin": attributes.get("origin", ""),
-        }
-        catchup = {
-            "catchup": attributes.get("catchup", ""),
-            "catchup-source": attributes.get("catchupsource", ""),
-        }
-        headers = {k: v for k, v in headers.items() if v}
-        catchup = {k: v for k, v in catchup.items() if v}
-        if not open_headers and headers:
-            return
-        item = {"name": name, "value": value, "catchup": catchup, "tvg_logo": attributes.get("tvglogo", "")}
-        if open_headers:
-            item["headers"] = headers
-        result.append(item)
-
-    if pattern is constants.multiline_m3u_pattern:
-        lines = content.splitlines()
-        index = 0
-        total = len(lines)
-
-        while index < total:
-            raw_line = lines[index]
-            stripped = raw_line.strip()
-            if not stripped.startswith("#EXTINF:-1"):
-                index += 1
-                continue
-
-            remainder = stripped[len("#EXTINF:-1"):].strip()
-            if not remainder:
-                index += 1
-                continue
-
-            in_quote = None
-            separator_index = None
-            for pos, char in enumerate(remainder):
-                if char in ('"', "'"):
-                    if in_quote == char:
-                        in_quote = None
-                    elif in_quote is None:
-                        in_quote = char
-                elif char == ',' and in_quote is None:
-                    separator_index = pos
-                    break
-
-            if separator_index is None:
-                separator_index = remainder.rfind(',')
-                if separator_index < 0:
-                    index += 1
-                    continue
-
-            attributes_text = remainder[:separator_index].strip()
-            name = remainder[separator_index + 1:].strip()
-            index += 1
-
-            options_lines = []
-            value = ""
-            while index < total:
-                candidate_raw = lines[index]
-                candidate = candidate_raw.strip()
-
-                if not candidate:
-                    index += 1
-                    continue
-
-                if candidate.startswith("#EXTVLCOPT:"):
-                    options_lines.append(candidate)
-                    index += 1
-                    continue
-
-                if candidate.startswith("#EXTINF:-1"):
-                    break
-
-                value = candidate
-                index += 1
-                break
-
-            if not name or (check_value and not value):
-                continue
-
-            attributes = get_headers_key_value("\n".join([part for part in [attributes_text, *options_lines] if part]))
-            append_item(name, value, attributes)
-
-        return result
-
-    for match in pattern.finditer(content):
-        group_dict = match.groupdict()
-        name = (group_dict.get("name", "") or "").strip()
-        value = (group_dict.get("value", "") or "").strip()
-        attributes = {**get_headers_key_value(group_dict.get("options", "")),
-                      **get_headers_key_value(group_dict.get("attributes", ""))}
-        append_item(name, value, attributes)
+            if data['ipv_type'] == "ipv6" and ipv6_proxy:
+                result.update(default_ipv6_result)
+            elif constants.rt_url_pattern.match(url) is not None:
+                async with _limit(probe_semaphore):
+                    start_time = time()
+                    ff_out = await ffmpeg_url(url, headers, timeout)
+                    if ff_out:
+                        try:
+                            parsed = get_video_info(ff_out)
+                            if parsed:
+                                result['delay'] = int(round((time() - start_time) * 1000))
+                                result['speed'] = parsed['speed']
+                                result['resolution'] = parsed['resolution']
+                                result['fps'] = parsed['fps']
+                                result['video_codec'] = parsed['video_codec']
+                                result['audio_codec'] = parsed['audio_codec']
+                        except Exception:
+                            pass
+            else:
+                result.update(await get_result(
+                    url,
+                    headers,
+                    resolution,
+                    filter_resolution,
+                    timeout,
+                    session=session,
+                    http_semaphore=http_semaphore,
+                    probe_semaphore=probe_semaphore,
+                ))
+            if cache_key:
+                cache.setdefault(cache_key, []).append(result)
+    except Exception as exc:
+        result["test_status"] = "request_error"
+        result["error_type"] = type(exc).__name__
+    finally:
+        if "test_status" not in result:
+            result["test_status"] = (
+                "measured"
+                if result.get("delay") not in {-1, None} and (result.get("speed") or 0) > 0
+                else "unreachable"
+            )
+        if callback:
+            callback()
+        if logger:
+            origin = data.get('origin')
+            origin_name = t(f"name.{origin}") if origin else origin
+            logger.info(
+                f"ID: {data.get('id')}, {t('name.name')}: {data.get('name')}, {t('pbar.url')}: {data.get('url')}, {t('name.from')}: {origin_name}, {t('name.ipv_type')}: {data.get('ipv_type')}, {t('name.location')}: {data.get('location')}, {t('name.isp')}: {data.get('isp')}, {t('name.delay')}: {result.get('delay') or -1} ms, {t('name.speed')}: {result.get('speed') or 0:.2f} MiB/s, {t('name.resolution')}: {result.get('resolution')}, {t('name.fps')}: {result.get('fps') or t('name.unknown')}, {t('name.video_codec')}: {result.get('video_codec') or t('name.unknown')}, {t('name.audio_codec')}: {result.get('audio_codec') or t('name.unknown')}"
+            )
     return result
 
 
-def get_real_path(path) -> str:
+def get_sort_result(
+        results,
+        supply=open_supply,
+        filter_speed=open_filter_speed,
+        min_speed=min_speed_value,
+        filter_resolution=open_filter_resolution,
+        min_resolution=min_resolution_value,
+        max_resolution=max_resolution_value,
+        ipv6_support=True
+) -> list[ChannelTestResult]:
     """
-    Get the real path
+    get the sort result
     """
-    dir_path, file = os.path.split(path)
-    user_real_path = os.path.join(dir_path, 'user_' + file)
-    real_path = user_real_path if os.path.exists(user_real_path) else path
-    return real_path
-
-
-def get_urls_from_file(path: str, pattern_search: bool = True) -> list:
-    """
-    Get the urls from file
-    """
-    real_path = get_real_path(resource_path(path))
-    urls = []
-    if os.path.exists(real_path):
-        with open(real_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if pattern_search:
-                    match = constants.url_pattern.search(line)
-                    if match:
-                        urls.append(match.group().strip())
-                else:
-                    urls.append(line)
-    return urls
-
-
-def get_name_urls_from_file(path: str | list, format_name_flag: bool = False) -> dict[str, list]:
-    """
-    Get the name and urls from file or list of files.
-    - path: single file path or list of file paths.
-    - format_name_flag: whether to format the channel name.
-    """
-    paths = path if isinstance(path, (list, tuple)) else [path]
-    name_urls = defaultdict(list)
-
-    for p in paths:
-        real_path = resource_path(p)
-        if not os.path.exists(real_path):
+    total_result = []
+    for result in results:
+        if not ipv6_support and result["ipv_type"] == "ipv6":
+            result.update(default_ipv6_result)
+            total_result.append(result)
             continue
-
-        try:
-            with open(real_path, "r", encoding="utf-8") as f:
-                content = f.read()
-        except Exception:
+        if not is_channel_result_valid(
+                result,
+                retain_special=True,
+                supply=supply,
+                filter_speed=filter_speed,
+                min_speed=min_speed,
+                resolution_speed_map=resolution_speed_map,
+                filter_resolution=filter_resolution,
+                min_resolution=min_resolution,
+                max_resolution=max_resolution,
+        ):
             continue
+        total_result.append(result)
 
-        filename = os.path.basename(real_path)
-        m3u_type = filename.lower().endswith(".m3u") or ("#EXTM3U" in content.upper())
+    def sort_key(item):
+        keys = []
+        for dim in sort_by:
+            if dim == "speed":
+                keys.append(-(item.get("speed") or 0))
+            elif dim == "delay":
+                delay = item.get("delay")
+                keys.append(delay if isinstance(delay, (int, float)) and delay >= 0 else float("inf"))
+            elif dim == "resolution":
+                keys.append(-(get_resolution_value(item.get("resolution") or "") or 0))
+        return tuple(keys)
 
-        if m3u_type:
-            pattern = constants.multiline_m3u_pattern
-            open_headers_flag = config.open_headers
-            data = get_name_value(content, pattern=pattern, open_headers=open_headers_flag)
-
-            for item in data:
-                name = format_name(item["name"]) if format_name_flag else item["name"]
-                url = item["value"]
-                if url and url not in name_urls[name]:
-                    name_urls[name].append(url)
-        else:
-            for line in content.splitlines():
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                name_value = get_name_value(line, pattern=constants.txt_pattern)
-                if name_value and name_value[0]:
-                    name = format_name(name_value[0]["name"]) if format_name_flag else name_value[0]["name"]
-                    url = name_value[0]["value"]
-                    if url and url not in name_urls[name]:
-                        name_urls[name].append(url)
-
-    return name_urls
+    total_result.sort(key=sort_key)
+    return total_result
 
 
-def get_name_uri_from_dir(path: str) -> dict:
+def clear_cache():
     """
-    Get the name and uri from dir, only from file name
+    Clear the speed test cache
     """
-    real_path = get_real_path(resource_path(path))
-    name_urls = defaultdict(list)
-    if os.path.exists(real_path):
-        for file in os.listdir(real_path):
-            file_path = os.path.join(real_path, file)
-            if not os.path.isfile(file_path):
-                continue
-            filename = os.path.splitext(file)[0]
-            name_urls[filename].append(os.path.normpath(os.path.abspath(file_path)))
-    return name_urls
-
-
-def get_datetime_now():
-    """
-    Get the datetime now
-    """
-    now = datetime.datetime.now()
-    time_zone = pytz.timezone(config.time_zone)
-    return now.astimezone(time_zone).strftime("%Y-%m-%d %H:%M:%S")
-
-
-def get_version_info():
-    """
-    Get the version info
-    """
-    with open(resource_path("version.json"), "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def join_url(url1: str, url2: str) -> str:
-    """
-    Get the join url
-    :param url1: The first url
-    :param url2: The second url
-    :return: The join url
-    """
-    if not url1:
-        return url2
-    if not url2:
-        return url1
-    if not url1.endswith("/"):
-        url1 += "/"
-    return url1 + url2
-
-
-def github_blob_to_raw(url: str) -> str:
-    """
-    Convert a GitHub repository blob (or tree) page URL to the corresponding
-    raw.githubusercontent.com URL. Handles percent-encoded path segments and
-    decodes them before safely re-quoting the path for the raw URL.
-    """
-
-    if not url:
-        return url
-
-    if "raw.githubusercontent.com" in url:
-        return url
-
-    parsed = urlparse(url)
-    netloc = parsed.netloc or ""
-    if "github.com" not in netloc:
-        return url
-
-    path = (parsed.path or "").lstrip('/')
-    parts = path.split('/')
-    if len(parts) < 5:
-        return url
-
-    owner, repo, marker = parts[0], parts[1], parts[2]
-    if marker not in ("blob", "tree"):
-        return url
-
-    branch = parts[3]
-    file_parts = parts[4:]
-    try:
-        decoded_path = '/'.join(unquote(p) for p in file_parts)
-        safe_path = quote(decoded_path, safe="/")
-    except Exception:
-        safe_path = '/'.join(file_parts)
-
-    raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{safe_path}"
-    return raw_url
-
-
-def get_request_url_candidates(url: str) -> List[str]:
-    """
-    Build the ordered list of candidate request urls for a source url. For
-    raw.githubusercontent.com urls every configured CDN mirror in
-    config.cdn_urls is prefixed in order so a failed mirror can fall back to
-    the next one; other urls return themselves. CDN is skipped under GitHub Actions.
-    """
-    if not os.getenv("GITHUB_ACTIONS") and config.cdn_urls:
-        raw_url = github_blob_to_raw(url)
-        if "raw.githubusercontent.com" in raw_url:
-            return [join_url(cdn, raw_url) for cdn in config.cdn_urls]
-        return [raw_url]
-    return [url]
-
-
-def request_first(candidates: List[str], fetch):
-    """
-    Try fetch(url) for each candidate url in order, returning the first
-    successful result; raise the last error if every candidate fails.
-    """
-    last_error = None
-    for url in candidates:
-        try:
-            return fetch(url)
-        except Exception as e:
-            last_error = e
-    if last_error:
-        raise last_error
-    return None
-
-
-def add_port_to_url(url: str, port: int) -> str:
-    """
-    Add port to the url
-    """
-    parsed = urlparse(url)
-    netloc = parsed.netloc
-    if parsed.username and parsed.password:
-        netloc = f"{parsed.username}:{parsed.password}@{netloc}"
-    if port:
-        netloc = f"{netloc}:{port}"
-    new_url = urlunparse((
-        parsed.scheme,
-        netloc,
-        parsed.path,
-        parsed.params,
-        parsed.query,
-        parsed.fragment
-    ))
-    return new_url
-
-
-def get_url_without_scheme(url: str) -> str:
-    """
-    Get the url without scheme
-    """
-    parsed = urlparse(url)
-    return parsed.netloc + parsed.path
-
-
-def find_by_id(data: dict, id: int) -> dict:
-    """
-    Find the nested dict by id
-    :param data: target data
-    :param id: target id
-    :return: target dict
-    """
-    if isinstance(data, dict) and 'id' in data and data['id'] == id:
-        return data
-    for key, value in data.items():
-        if isinstance(value, dict):
-            result = find_by_id(value, id)
-            if result is not None:
-                return result
-        elif isinstance(value, list):
-            for item in value:
-                if isinstance(item, dict):
-                    result = find_by_id(item, id)
-                    if result is not None:
-                        return result
-    return {}
-
-
-def custom_print(*args, **kwargs):
-    """
-    Custom print
-    """
-    if not custom_print.disable:
-        kwargs.setdefault("flush", True)
-        print(*args, **kwargs)
-
-
-def get_urls_len(data) -> int:
-    """
-    Get the dict urls length
-    """
-    urls = set(
-        url_info["url"]
-        for value in data.values()
-        for url_info_list in value.values()
-        for url_info in url_info_list
-    )
-    return len(urls)
-
-
-def render_nginx_conf(nginx_conf_template, nginx_conf, replacements=None):
-    """
-    Render the nginx conf file
-    """
-
-    with open(nginx_conf_template, 'r', encoding='utf-8') as f:
-        content = f.read()
-
-    content = content.replace('${APP_PORT}', str(config.app_port))
-    content = content.replace('${NGINX_HTTP_PORT}', str(config.service_port))
-    content = content.replace('${NGINX_RTMP_PORT}', str(config.nginx_rtmp_port))
-    for key, value in (replacements or {}).items():
-        content = content.replace(key, str(value))
-
-    with open(nginx_conf, 'w', encoding='utf-8') as f:
-        f.write(content)
-
-
-def parse_times(times_str: str):
-    """
-    Parse times from a string in the format "HH:MM, HH:MM, ..."
-    """
-    times = []
-    for part in (times_str or "").split(","):
-        part = part.strip()
-        if not part:
-            continue
-        try:
-            hh_mm = part.split(":")
-            h = int(hh_mm[0])
-            m = int(hh_mm[1]) if len(hh_mm) > 1 else 0
-            times.append((h, m))
-        except Exception:
-            continue
-    return times
-
-
-def build_path_list(
-        dir_path: Union[str, Path],
-        exts: Optional[Union[str, Iterable[str]]] = None,
-        recursive: bool = True,
-        include_hidden: bool = False
-) -> List[str]:
-    """
-    Build a list of file paths from a directory with filtering options.
-    :param dir_path: The directory path to search.
-    :param exts: Optional; A string or iterable of file extensions to filter by (e.g., '.txt', 'jpg'). Case-insensitive.
-    :param recursive: Whether to search subdirectories recursively.
-    :param include_hidden: Whether to include hidden files (those starting with a dot).
-    :return: A sorted list of file paths matching the criteria.
-    """
-    p = Path(dir_path)
-    if not p.exists() or not p.is_dir():
-        return []
-
-    exts_set = None
-    if exts:
-        if isinstance(exts, str):
-            exts = [exts]
-        exts_set = {e.lower() if e.startswith('.') else f".{e.lower()}" for e in exts}
-
-    iterator = p.rglob("*") if recursive else p.glob("*")
-    paths = []
-    for f in iterator:
-        if not f.is_file():
-            continue
-        if not include_hidden and f.name.startswith("."):
-            continue
-        if exts_set and f.suffix.lower() not in exts_set:
-            continue
-        paths.append(str(f.resolve()))
-    return sorted(paths)
-
-
-def to_serializable(obj):
-    """
-    Convert an object to a serializable form.
-    Handles dicts, lists, tuples, sets, and other iterables recursively.
-    Non-serializable objects are returned as-is.
-    """
-    if isinstance(obj, dict):
-        return {k: to_serializable(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple, set)):
-        return [to_serializable(i) for i in obj]
-    try:
-        if not isinstance(obj, (str, bytes)) and hasattr(obj, "__iter__"):
-            return [to_serializable(i) for i in obj]
-    except Exception:
-        pass
-    return obj
-
-
-def count_files_by_ext(
-        dir_path: Union[str, Path],
-        exts: Optional[Union[str, Iterable[str]]] = None,
-        recursive: bool = False,
-        include_hidden: bool = False
-) -> int:
-    """
-    Count files in a directory with filtering options.
-    :param dir_path: The directory path to search.
-    :param exts: Optional; A string or iterable of file extensions to filter by (e.g., '.txt', 'jpg'). Case-insensitive.
-    :param recursive: Whether to search subdirectories recursively.
-    :param include_hidden: Whether to include hidden files (those starting with a dot).
-    :return: The count of files matching the criteria.
-    """
-    p = Path(dir_path)
-    if not p.exists() or not p.is_dir():
-        return 0
-
-    exts_set = None
-    if exts:
-        if isinstance(exts, str):
-            exts = [exts]
-        exts_set = {e.lower() if e.startswith('.') else f".{e.lower()}" for e in exts}
-
-    iterator = p.rglob("*") if recursive else p.glob("*")
-    count = 0
-    for f in iterator:
-        if not f.is_file():
-            continue
-        if not include_hidden and f.name.startswith("."):
-            continue
-        if exts_set and f.suffix.lower() not in exts_set:
-            continue
-        count += 1
-
-    return count
-
-
-def sanitize_filename_from_url(url: str, max_len: int = 200) -> str:
-    """
-    Create a filesystem-safe filename from a URL. Limits length and falls back to a hash when needed.
-    """
-    try:
-        if not url:
-            raise ValueError("empty url")
-        safe = unquote(url)
-        safe = re.sub(r'[<>:"/\\|?*]', '_', safe)
-        safe = re.sub(r'\s+', '_', safe)
-        safe = re.sub(r'_+', '_', safe)
-        safe = safe.strip('._')
-        if not safe:
-            raise ValueError("sanitized empty")
-        if len(safe) > max_len:
-            h = hashlib.sha256(url.encode('utf-8')).hexdigest()
-            keep = max_len - (1 + len(h))
-            safe = safe[:keep] + '_' + h
-        return safe
-    except Exception:
-        return hashlib.sha256((url or '').encode('utf-8')).hexdigest()
-
-
-def save_url_content(category: str, url: str, content: str) -> None:
-    """
-    Save the raw content fetched from `url` into output/log/<category>/<sanitized_url>.txt.
-    Overwrites existing files when called multiple times for the same url.
-    """
-    try:
-        if not category:
-            category = "misc"
-        dir_path = os.path.join(constants.output_dir, "log", category)
-        os.makedirs(dir_path, exist_ok=True)
-        filename = sanitize_filename_from_url(url)
-        file_path = os.path.join(dir_path, f"{filename}.txt")
-        with open(file_path, "w", encoding="utf-8") as f:
-            if isinstance(content, bytes):
-                try:
-                    f.write(content.decode('utf-8'))
-                except Exception:
-                    f.write(content.decode('latin-1', errors='ignore'))
-            else:
-                f.write(str(content))
-    except Exception as e:
-        print(f"Failed to save content for {url} into {category}: {e}")
-
-
-def get_subscribe_entries(path: str = "config/subscribe.txt") -> tuple[list, list]:
-    """
-    Parse the subscribe file and return two lists of entries (inside [WHITELIST], outside).
-    Each entry is a dict: {"url": <url>, "headers": {<Header-Name>: <value>, ...}} where headers is optional.
-
-    Supported line format (simple):
-        <url> KEY=VALUE KEY2="value with spaces" KEY3='another'
-    KEY `UA` or `User-Agent` will be mapped to the `User-Agent` header.
-    """
-    real_path = get_real_path(resource_path(path))
-    inside = []
-    outside = []
-    if not os.path.exists(real_path):
-        return inside, outside
-
-    header_re = re.compile(r"^\[.*]$")
-    in_section = False
-    kv_re = re.compile(r"(?P<k>\w+)=((?P<q>\".*?\"|'.*?')|(?P<v>\S+))")
-    seen_inside = set()
-    seen_outside = set()
-
-    with open(real_path, "r", encoding="utf-8") as f:
-        for raw in f:
-            line = raw.rstrip("\n")
-            s = line.strip()
-            if not s:
-                continue
-            if header_re.match(s):
-                in_section = s.upper() == "[WHITELIST]"
-                continue
-            if s.startswith("#"):
-                continue
-
-            match = constants.url_pattern.search(s)
-            if not match:
-                continue
-
-            url = match.group().strip()
-            remainder = s[match.end():].strip()
-            headers = {}
-            for m in kv_re.finditer(remainder):
-                key = m.group("k")
-                val = m.group("q") or m.group("v")
-                if not val:
-                    continue
-                val = val.strip()
-                if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
-                    val = val[1:-1]
-                if key.lower() in ("ua", "useragent", "user-agent"):
-                    headers["User-Agent"] = val
-                else:
-                    headers[key] = val
-
-            entry = {"url": url}
-            if headers:
-                entry["headers"] = headers
-
-            target = inside if in_section else outside
-            seen = seen_inside if in_section else seen_outside
-            dedupe_key = (url, tuple(sorted(headers.items())))
-            if dedupe_key in seen:
-                continue
-            seen.add(dedupe_key)
-            target.append(entry)
-
-    return inside, outside
-
-
-def count_disabled_urls(path: str) -> int:
-    """
-    Count disabled url lines in the config file.
-    """
-    real_path = get_real_path(resource_path(path))
-    if not os.path.exists(real_path):
-        return 0
-
-    disabled_count = 0
-    with open(real_path, "r", encoding="utf-8") as f:
-        for raw in f:
-            line = raw.strip()
-            if not line.startswith("#"):
-                continue
-            commented = line.lstrip("#").strip()
-            if commented and constants.url_pattern.match(commented):
-                disabled_count += 1
-    return disabled_count
-
-
-def disable_urls_in_file(path: str, urls: Iterable[str]) -> dict[str, int]:
-    """
-    Comment out matching url lines in the config file and return counts.
-    Returns: {"disabled": <disabled_count>, "active": <active_count>}
-    Disabled urls are moved after active urls within the same section, separated by one blank line.
-    """
-    target_urls = {url.strip() for url in urls if url and str(url).strip()}
-    if not target_urls:
-        return {"disabled": 0, "active": 0}
-
-    real_path = get_real_path(resource_path(path))
-    if not os.path.exists(real_path):
-        return {"disabled": 0, "active": 0}
-
-    header_re = re.compile(r"^\s*\[.*]\s*$")
-
-    try:
-        with open(real_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-
-        newline = "\r\n" if any(line.endswith("\r\n") for line in lines) else "\n"
-
-        def new_section(header=None):
-            return {"header": header, "misc": [], "active": [], "disabled": []}
-
-        sections = [new_section()]
-        disabled_count = 0
-        active_count = 0
-
-        for raw in lines:
-            stripped = raw.strip()
-
-            if not stripped:
-                continue
-
-            if header_re.match(stripped):
-                sections.append(new_section(raw.rstrip("\r\n")))
-                continue
-
-            current = sections[-1]
-            indent = raw[: len(raw) - len(raw.lstrip())]
-
-            if stripped.startswith("#"):
-                commented = stripped.lstrip("#").strip()
-                match = constants.url_pattern.search(commented)
-                if match:
-                    url = match.group("url").strip()
-                    if url in target_urls:
-                        current["disabled"].append((indent, url))
-                        disabled_count += 1
-                    else:
-                        current["misc"].append(raw.rstrip("\r\n"))
-                else:
-                    current["misc"].append(raw.rstrip("\r\n"))
-                continue
-
-            match = constants.url_pattern.search(stripped)
-            if match:
-                url = match.group("url").strip()
-                if url in target_urls:
-                    current["disabled"].append((indent, url))
-                    disabled_count += 1
-                else:
-                    current["active"].append(raw.rstrip("\r\n"))
-                    active_count += 1
-            else:
-                current["misc"].append(raw.rstrip("\r\n"))
-
-        output_lines = []
-        for section in sections:
-            section_lines = []
-
-            if section["header"] is not None:
-                if output_lines and output_lines[-1] != "":
-                    output_lines.append("")
-                output_lines.append(section["header"])
-
-            section_lines.extend(section["misc"])
-            section_lines.extend(section["active"])
-
-            if section_lines and section["disabled"]:
-                if section_lines[-1] != "":
-                    section_lines.append("")
-
-            section_lines.extend(f"{indent}# {url}" for indent, url in section["disabled"])
-
-            cleaned_lines = []
-            prev_blank = False
-            for line in section_lines:
-                if not line.strip():
-                    if not prev_blank:
-                        cleaned_lines.append("")
-                    prev_blank = True
-                else:
-                    cleaned_lines.append(line)
-                    prev_blank = False
-
-            output_lines.extend(cleaned_lines)
-
-        new_content = newline.join(output_lines)
-        if lines and lines[-1].endswith(("\n", "\r")):
-            new_content += newline
-
-        original_content = "".join(lines)
-        if new_content != original_content:
-            with open(real_path, "w", encoding="utf-8") as f:
-                f.write(new_content)
-
-        return {"disabled": disabled_count, "active": active_count}
-    except Exception as e:
-        print(f"Failed to auto-disable urls in {real_path}: {e}")
-        return {"disabled": 0, "active": 0}
-
-
-def close_logger_handlers(logger) -> None:
-    for h in logger.handlers[:]:
-        try:
-            h.flush()
-            h.close()
-        except Exception:
-            pass
-        logger.removeHandler(h)
-
-
-def fast_get_ipv_type(host: str | None) -> str | None:
-    """
-    Infer the IPv type from a host string without DNS resolution.
-    """
-    if not host:
-        return None
-
-    normalized_host = host.strip().strip("[]")
-    if "%" in normalized_host:
-        normalized_host = normalized_host.split("%", 1)[0]
-
-    try:
-        return f"ipv{ipaddress.ip_address(normalized_host).version}"
-    except ValueError:
-        return "ipv4"
+    global cache
+    cache = {}

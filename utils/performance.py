@@ -1,162 +1,128 @@
-import os
+"""Parse and merge local channel source files for the desktop editor."""
+
 from dataclasses import dataclass
-from functools import lru_cache
+import os
+from urllib.parse import urlparse
 
 
-PERFORMANCE_MODES = ("auto", "powersave", "balance", "fast")
+SUPPORTED_SCHEMES = {"http", "https", "rtmp", "rtsp"}
 
 
-@dataclass(frozen=True)
-class PerformanceSettings:
-    requested_mode: str
-    resolved_mode: str
-    cpu_count: float
-    memory_gb: float
-    speed_test_concurrency: int
-    probe_concurrency: int
-    fetch_workers: int
-    epg_fetch_concurrency: int
-    epg_parse_concurrency: int
+@dataclass
+class ImportRecord:
+    file_name: str
+    line_number: int
+    channel: str
+    url: str
+    status: str = "new"
+    reason: str = ""
+    selected: bool = True
 
 
-def _read_text(path):
-    try:
-        with open(path, "r", encoding="utf-8") as file:
-            return file.read().strip()
-    except (OSError, ValueError):
-        return ""
+def _decode(data: bytes) -> str:
+    for encoding in ("utf-8-sig", "gb18030"):
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    raise UnicodeDecodeError("unknown", data, 0, len(data), "unsupported text encoding")
 
 
-def _positive_float(value):
-    try:
-        number = float(value)
-        return number if number > 0 else None
-    except (TypeError, ValueError):
-        return None
+def _is_url(value: str) -> bool:
+    parsed = urlparse(value)
+    return parsed.scheme.lower() in SUPPORTED_SCHEMES and bool(parsed.netloc)
 
 
-def _cpu_quota():
-    cpu_max = _read_text("/sys/fs/cgroup/cpu.max").split()
-    if len(cpu_max) == 2 and cpu_max[0] != "max":
-        quota = _positive_float(cpu_max[0])
-        period = _positive_float(cpu_max[1])
-        if quota and period:
-            return quota / period
-
-    quota = _positive_float(_read_text("/sys/fs/cgroup/cpu/cpu.cfs_quota_us"))
-    period = _positive_float(_read_text("/sys/fs/cgroup/cpu/cpu.cfs_period_us"))
-    if quota and period:
-        return quota / period
-    return None
-
-
-def _physical_memory_bytes():
-    try:
-        return int(os.sysconf("SC_PHYS_PAGES")) * int(os.sysconf("SC_PAGE_SIZE"))
-    except (AttributeError, OSError, TypeError, ValueError):
-        return 0
+def _split_extinf(line: str):
+    remainder = line[len("#EXTINF:"):]
+    in_quote = None
+    for index, char in enumerate(remainder):
+        if char in ('"', "'"):
+            if in_quote == char:
+                in_quote = None
+            elif in_quote is None:
+                in_quote = char
+        elif char in ",，" and in_quote is None:
+            return remainder[index + 1:].strip()
+    return ""
 
 
-def _memory_limit_bytes():
-    values = [
-        _read_text("/sys/fs/cgroup/memory.max"),
-        _read_text("/sys/fs/cgroup/memory/memory.limit_in_bytes"),
-    ]
-    limits = []
-    for value in values:
-        if value and value != "max":
-            try:
-                limit = int(value)
-            except ValueError:
-                continue
-            if 0 < limit < (1 << 60):
-                limits.append(limit)
-    return min(limits) if limits else 0
-
-
-@lru_cache(maxsize=1)
-def detect_resources():
-    cpu_values = [float(os.cpu_count() or 1)]
-    try:
-        cpu_values.append(float(len(os.sched_getaffinity(0))))
-    except (AttributeError, OSError):
-        pass
-    if quota := _cpu_quota():
-        cpu_values.append(quota)
-    cpu_count = max(0.25, min(cpu_values))
-
-    memory_values = [value for value in (_physical_memory_bytes(), _memory_limit_bytes()) if value > 0]
-    memory_bytes = min(memory_values) if memory_values else 2 * 1024 ** 3
-    return cpu_count, memory_bytes / 1024 ** 3
-
-
-def _bounded(value, lower, upper):
-    return max(lower, min(upper, int(value)))
-
-
-@lru_cache(maxsize=16)
-def get_performance_settings(mode="auto", speed_test_limit=0):
-    requested_mode = str(mode or "auto").lower()
-    if requested_mode not in PERFORMANCE_MODES:
-        requested_mode = "auto"
-
-    cpu_count, memory_gb = detect_resources()
-    if requested_mode == "auto":
-        if cpu_count <= 1.5 or memory_gb <= 1.5:
-            resolved_mode = "powersave"
-        elif cpu_count >= 6 and memory_gb >= 6:
-            resolved_mode = "fast"
+def _parse_txt(lines, file_name):
+    records = []
+    errors = []
+    for line_number, raw_line in enumerate(lines, 1):
+        line = raw_line.strip()
+        if not line or line.startswith(("#", ";")):
+            continue
+        separator = "," if "," in line else "，" if "，" in line else None
+        if not separator:
+            errors.append(ImportRecord(file_name, line_number, "", line, "invalid", "missing_separator", False))
+            continue
+        channel, url = (part.strip() for part in line.split(separator, 1))
+        if not channel or not url:
+            errors.append(ImportRecord(file_name, line_number, channel, url, "invalid", "missing_value", False))
+        elif not _is_url(url):
+            errors.append(ImportRecord(file_name, line_number, channel, url, "invalid", "invalid_url", False))
         else:
-            resolved_mode = "balance"
-    else:
-        resolved_mode = requested_mode
+            records.append(ImportRecord(file_name, line_number, channel, url))
+    return records, errors
 
-    memory_http_limit = _bounded(memory_gb * 3, 2, 16)
-    memory_probe_limit = _bounded(memory_gb / 1.5, 1, 4)
-    memory_fetch_limit = _bounded(memory_gb * 2, 2, 16)
-    cpu_probe_limit = _bounded(cpu_count / 2, 1, 4)
 
-    if resolved_mode == "powersave":
-        http_concurrency = 3
-        probe_concurrency = 1
-        fetch_workers = 4
-    elif resolved_mode == "fast":
-        http_concurrency = _bounded(cpu_count * 2.5, 8, 16)
-        probe_concurrency = _bounded(cpu_count / 2, 1, 4)
-        fetch_workers = _bounded(cpu_count * 2, 8, 16)
-    else:
-        http_concurrency = _bounded(cpu_count * 2, 5, 10)
-        probe_concurrency = _bounded(cpu_count / 2, 1, 2)
-        fetch_workers = _bounded(cpu_count * 2, 6, 10)
+def _parse_m3u(lines, file_name):
+    records = []
+    errors = []
+    pending = None
+    for line_number, raw_line in enumerate(lines, 1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.upper().startswith("#EXTINF:"):
+            pending = (line_number, _split_extinf(line))
+            continue
+        if line.startswith("#"):
+            continue
+        if pending is None:
+            continue
+        info_line, channel = pending
+        pending = None
+        if not channel or not _is_url(line):
+            errors.append(ImportRecord(file_name, info_line, channel, line, "invalid", "missing_value" if not channel else "invalid_url", False))
+        else:
+            records.append(ImportRecord(file_name, info_line, channel, line))
+    if pending is not None:
+        info_line, channel = pending
+        errors.append(ImportRecord(file_name, info_line, channel, "", "invalid", "missing_url", False))
+    return records, errors
 
-    http_concurrency = min(http_concurrency, memory_http_limit)
-    probe_concurrency = min(probe_concurrency, memory_probe_limit, cpu_probe_limit)
-    fetch_workers = min(fetch_workers, memory_fetch_limit)
 
-    if resolved_mode == "powersave":
-        epg_fetch_concurrency = 1
-    elif resolved_mode == "fast" and memory_gb >= 8:
-        epg_fetch_concurrency = 4
-    else:
-        epg_fetch_concurrency = 2
-    epg_fetch_concurrency = min(epg_fetch_concurrency, fetch_workers)
-    epg_parse_concurrency = 2 if resolved_mode == "fast" and memory_gb >= 8 else 1
-
+def parse_local_source_file(path: str):
+    """Return valid records and invalid records from one TXT or M3U file."""
+    file_name = os.path.basename(path)
     try:
-        configured_limit = int(speed_test_limit or 0)
-    except (TypeError, ValueError):
-        configured_limit = 0
-    if configured_limit > 0:
-        http_concurrency = _bounded(configured_limit, 1, 64)
+        with open(path, "rb") as source:
+            content = _decode(source.read())
+    except (OSError, UnicodeDecodeError) as error:
+        return [], [ImportRecord(file_name, 0, "", "", "invalid", str(error), False)]
 
-    return PerformanceSettings(
-        requested_mode=requested_mode,
-        resolved_mode=resolved_mode,
-        cpu_count=round(cpu_count, 2),
-        memory_gb=round(memory_gb, 2),
-        speed_test_concurrency=max(1, http_concurrency),
-        probe_concurrency=max(1, probe_concurrency),
-        fetch_workers=max(1, fetch_workers),
-        epg_fetch_concurrency=max(1, epg_fetch_concurrency),
-        epg_parse_concurrency=max(1, epg_parse_concurrency),
+    lines = content.splitlines()
+    is_m3u = path.lower().endswith(".m3u") or any(
+        line.strip().upper().startswith(("#EXTM3U", "#EXTINF:")) for line in lines
     )
+    return _parse_m3u(lines, file_name) if is_m3u else _parse_txt(lines, file_name)
+
+
+def merge_records(existing_rows, records):
+    """Mark duplicate records and return records that should be appended."""
+    known = {(row.get("channel", "").strip(), row.get("url", "").strip()) for row in existing_rows}
+    seen = set(known)
+    new_records = []
+    for record in records:
+        key = (record.channel, record.url)
+        if key in seen:
+            record.status = "duplicate"
+            record.reason = "duplicate"
+            record.selected = False
+        else:
+            seen.add(key)
+            new_records.append(record)
+    return new_records

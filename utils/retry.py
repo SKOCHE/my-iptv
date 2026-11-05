@@ -1,23 +1,21 @@
-from time import sleep
-
-from utils.i18n import t
-
-max_retries = 2
+import os
+import sys
+from pathlib import Path
 
 
-def retry_func(func, retries=max_retries, name=""):
-    """
-    Retry the function
-    """
-    for i in range(retries):
-        try:
-            sleep(1)
-            return func()
-        except Exception as e:
-            if name and i < retries - 1:
-                print(t("msg.failed_retrying_count").format(name=name, count=i + 1), flush=True)
-            elif i == retries - 1:
-                raise Exception(
-                    t("msg.failed_retry_max").format(name=name)
-                )
-    raise Exception(t("msg.failed_retry_max").format(name=name))
+def bundled_resource_path(relative_path: str) -> str:
+    if os.path.isabs(relative_path):
+        return relative_path
+    bundle_root = getattr(sys, "_MEIPASS", None)
+    if bundle_root:
+        return os.path.join(bundle_root, relative_path)
+    return str(Path(__file__).resolve().parents[1] / relative_path)
+
+
+def resource_path(relative_path: str, persistent: bool = False) -> str:
+    if os.path.isabs(relative_path):
+        return relative_path
+    working_path = os.path.abspath(relative_path)
+    if persistent or os.path.exists(working_path):
+        return working_path
+    return bundled_resource_path(relative_path)

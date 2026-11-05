@@ -62,7 +62,12 @@ def prepare_database() -> str:
 
 class IPChecker:
     def __init__(self):
-        self.db = ipdb.City(prepare_database())
+        # The QQWry database is optional. Channel discovery and stream testing
+        # do not require geolocation; when absent, skip location/ISP enrichment.
+        try:
+            self.db = ipdb.City(prepare_database())
+        except FileNotFoundError:
+            self.db = None
         self.url_host = {}
         self.host_ip = {}
         self.host_ipv_type = {}
@@ -117,6 +122,8 @@ class IPChecker:
         :param ip: The IP address to find
         :return: A tuple of (location, ISP)
         """
+        if self.db is None:
+            return None, None
         try:
             result = self.db.find_map(ip, "CN")
             if not result:

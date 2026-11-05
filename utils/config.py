@@ -1,1169 +1,1635 @@
-import configparser
-import difflib
-import ipaddress
+import hashlib
+import json
 import math
 import os
-import re
-import shutil
-import socket
-import subprocess
-import sys
-from dataclasses import dataclass
-from urllib.parse import urlsplit
+import sqlite3
+import threading
+import time
+import uuid
+from typing import Any
+from urllib.parse import urlparse
 
-import pytz
-
-from utils.performance import PERFORMANCE_MODES, get_performance_settings
-from utils.process import no_window_process_kwargs
-from utils.resources import resource_path
-
-
-@dataclass(frozen=True)
-class ConfigRule:
-    kind: str = "string"
-    choices: tuple[str, ...] = ()
-    minimum: float | None = None
-    maximum: float | None = None
-    allow_empty: bool = False
+from utils.channel_quality import is_channel_result_valid
+from utils.config import config
+from utils.config import resource_path
+import utils.constants as constants
+from utils.db import get_db_connection, return_db_connection, with_journal_fallback
+from utils.identity import stable_channel_id, stable_result_id
+from utils.i18n import t
 
 
-@dataclass(frozen=True)
-class ConfigIssue:
-    source: str
-    section: str | None
-    key: str | None
-    value: str | None
-    message: str
-
-    def __str__(self):
-        location = self.source
-        if self.section:
-            location += f": [{self.section}]"
-        if self.key:
-            location += f" {self.key}"
-        if self.value is not None:
-            display_value = self.value if len(self.value) <= 80 else f"{self.value[:77]}..."
-            location += f" = {display_value!r}"
-        return f"{location}：{self.message}"
+_LOCK = threading.Lock()
+_SQL_BATCH_SIZE = 900
 
 
-class ConfigValidationError(ValueError):
-    def __init__(self, issues):
-        self.issues = tuple(issues)
-        details = "\n".join(f"- {issue}" for issue in self.issues)
-        super().__init__(f"配置校验失败：\n{details}")
+def _batches(values):
+    values = list(values)
+    for index in range(0, len(values), _SQL_BATCH_SIZE):
+        yield values[index:index + _SQL_BATCH_SIZE]
 
 
-BOOLEAN_KEYS = {
-    "ipv6_support",
-    "open_auto_disable_source",
-    "open_empty_category",
-    "open_epg",
-    "open_filter_ad",
-    "open_filter_resolution",
-    "open_filter_speed",
-    "open_full_speed_test",
-    "open_headers",
-    "open_history",
-    "open_local",
-    "open_m3u_result",
-    "open_request",
-    "open_realtime_write",
-    "open_rtmp",
-    "open_service",
-    "open_speed_test",
-    "open_stream_screenshot",
-    "open_subscribe",
-    "open_subscribe_epg",
-    "open_subscribe_logo",
-    "open_supply",
-    "open_unmatch_category",
-    "open_update",
-    "open_update_time",
-    "open_url_info",
-    "open_use_cache",
-    "speed_test_filter_host",
-    "update_startup",
-}
+@with_journal_fallback
+def ensure_channel_repository(db_path: str, *, journal_mode="WAL") -> None:
+    with _LOCK:
+        conn = get_db_connection(db_path, journal_mode=journal_mode)
+        try:
+            conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS runs (
+                    run_id TEXT PRIMARY KEY,
+                    started_at REAL NOT NULL,
+                    finished_at REAL,
+                    status TEXT NOT NULL,
+                    config_hash TEXT,
+                    error TEXT
+                );
+                CREATE TABLE IF NOT EXISTS channels (
+                    channel_key TEXT PRIMARY KEY,
+                    category TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    total_results INTEGER NOT NULL DEFAULT 0,
+                    untested_results INTEGER NOT NULL DEFAULT 0,
+                    selection_mode TEXT NOT NULL DEFAULT 'auto',
+                    valid_results INTEGER NOT NULL DEFAULT 0,
+                    selected_results INTEGER NOT NULL DEFAULT 0,
+                    best_speed REAL,
+                    min_delay REAL,
+                    max_resolution TEXT,
+                    health TEXT NOT NULL DEFAULT 'unknown',
+                    logo TEXT,
+                    updated_at REAL NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_channels_category ON channels(category, name);
+                CREATE TABLE IF NOT EXISTS channel_results (
+                    channel_key TEXT NOT NULL,
+                    result_key TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    host TEXT,
+                    headers TEXT,
+                    origin TEXT,
+                    ipv_type TEXT,
+                    location TEXT,
+                    isp TEXT,
+                    speed REAL,
+                    delay REAL,
+                    resolution TEXT,
+                    fps REAL,
+                    video_codec TEXT,
+                    audio_codec TEXT,
+                    supply INTEGER NOT NULL DEFAULT 0,
+                    valid INTEGER NOT NULL DEFAULT 0,
+                    test_status TEXT,
+                    error_type TEXT,
+                    selected_rank INTEGER,
+                    tested_at REAL,
+                    last_seen_at REAL NOT NULL,
+                    extra_data TEXT,
+                    PRIMARY KEY(channel_key, result_key),
+                    FOREIGN KEY(channel_key) REFERENCES channels(channel_key) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_results_result_key ON channel_results(result_key);
+                CREATE TABLE IF NOT EXISTS output_snapshots (
+                    run_id TEXT NOT NULL,
+                    channel_key TEXT NOT NULL,
+                    result_key TEXT NOT NULL,
+                    output_rank INTEGER NOT NULL,
+                    exported_at REAL NOT NULL,
+                    PRIMARY KEY(run_id, channel_key, result_key),
+                    FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
+                    FOREIGN KEY(channel_key) REFERENCES channels(channel_key) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_output_snapshots_run ON output_snapshots(run_id, channel_key, output_rank);
+                CREATE TABLE IF NOT EXISTS channel_selection (
+                    channel_key TEXT NOT NULL,
+                    result_key TEXT NOT NULL,
+                    selection_rank INTEGER NOT NULL,
+                    selection_state TEXT NOT NULL DEFAULT 'included',
+                    pinned INTEGER NOT NULL DEFAULT 0,
+                    updated_at REAL NOT NULL,
+                    PRIMARY KEY(channel_key, result_key),
+                    FOREIGN KEY(channel_key) REFERENCES channels(channel_key) ON DELETE CASCADE
+                );
+                CREATE TABLE IF NOT EXISTS candidate_history (
+                    run_id TEXT NOT NULL,
+                    channel_key TEXT NOT NULL,
+                    result_key TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    origin TEXT,
+                    first_seen_at REAL NOT NULL,
+                    last_seen_at REAL NOT NULL,
+                    PRIMARY KEY(run_id, channel_key, result_key),
+                    FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_candidate_history_key
+                    ON candidate_history(channel_key, result_key, last_seen_at);
+                CREATE TABLE IF NOT EXISTS candidate_pool (
+                    channel_key TEXT NOT NULL,
+                    result_key TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    origin TEXT,
+                    first_seen_at REAL NOT NULL,
+                    last_seen_at REAL NOT NULL,
+                    last_run_id TEXT,
+                    seen_count INTEGER NOT NULL DEFAULT 1,
+                    PRIMARY KEY(channel_key, result_key)
+                );
+                CREATE INDEX IF NOT EXISTS idx_candidate_pool_channel
+                    ON candidate_pool(channel_key, last_seen_at);
+                CREATE TABLE IF NOT EXISTS candidate_measurements (
+                    run_id TEXT NOT NULL,
+                    channel_key TEXT NOT NULL,
+                    result_key TEXT NOT NULL,
+                    speed REAL,
+                    delay REAL,
+                    resolution TEXT,
+                    fps REAL,
+                    video_codec TEXT,
+                    audio_codec TEXT,
+                    valid INTEGER NOT NULL DEFAULT 0,
+                    test_status TEXT,
+                    error_type TEXT,
+                    tested_at REAL,
+                    measured_at REAL NOT NULL,
+                    PRIMARY KEY(run_id, channel_key, result_key),
+                    FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_candidate_measurements_key
+                    ON candidate_measurements(channel_key, result_key, measured_at);
+                CREATE TABLE IF NOT EXISTS stream_samples (
+                    sampled_at REAL NOT NULL,
+                    result_key TEXT NOT NULL,
+                    clients INTEGER NOT NULL DEFAULT 0,
+                    bw_in REAL NOT NULL DEFAULT 0,
+                    bw_out REAL NOT NULL DEFAULT 0,
+                    bytes_in INTEGER NOT NULL DEFAULT 0,
+                    bytes_out INTEGER NOT NULL DEFAULT 0,
+                    active INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY(sampled_at, result_key)
+                );
+                CREATE INDEX IF NOT EXISTS idx_stream_samples_time ON stream_samples(sampled_at);
+                CREATE TABLE IF NOT EXISTS operation_history (
+                    operation_id TEXT PRIMARY KEY,
+                    operation TEXT NOT NULL,
+                    target_type TEXT NOT NULL,
+                    target_key TEXT,
+                    started_at REAL NOT NULL,
+                    finished_at REAL,
+                    status TEXT NOT NULL,
+                    message TEXT
+                );
+                CREATE TABLE IF NOT EXISTS stream_screenshots (
+                    result_key TEXT PRIMARY KEY,
+                    filename TEXT,
+                    status TEXT NOT NULL,
+                    captured_at REAL,
+                    attempted_at REAL NOT NULL,
+                    width INTEGER,
+                    height INTEGER,
+                    error TEXT
+                );
+                PRAGMA user_version=2;
+                """
+            )
+            # These names expose the four-layer model without breaking the
+            # legacy ``channel_results`` table used by older integrations.
+            conn.execute(
+                """
+                CREATE VIEW IF NOT EXISTS channel_candidates AS
+                SELECT * FROM channel_results
+                """
+            )
+            conn.execute(
+                """
+                CREATE VIEW IF NOT EXISTS candidate_selection AS
+                SELECT channel_key, result_key,
+                       selection_state AS state,
+                       selection_rank AS manual_rank,
+                       pinned,
+                       updated_at
+                FROM channel_selection
+                """
+            )
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(channels)")}
+            if "logo" not in columns:
+                conn.execute("ALTER TABLE channels ADD COLUMN logo TEXT")
+            if "untested_results" not in columns:
+                conn.execute(
+                    "ALTER TABLE channels ADD COLUMN untested_results INTEGER NOT NULL DEFAULT 0"
+                )
+            if "selection_mode" not in columns:
+                conn.execute(
+                    "ALTER TABLE channels ADD COLUMN selection_mode TEXT NOT NULL DEFAULT 'auto'"
+                )
+            result_columns = {row[1] for row in conn.execute("PRAGMA table_info(channel_results)")}
+            if "test_status" not in result_columns:
+                conn.execute("ALTER TABLE channel_results ADD COLUMN test_status TEXT")
+            if "error_type" not in result_columns:
+                conn.execute("ALTER TABLE channel_results ADD COLUMN error_type TEXT")
+            selection_columns = {row[1] for row in conn.execute("PRAGMA table_info(channel_selection)")}
+            if "selection_state" not in selection_columns:
+                conn.execute(
+                    "ALTER TABLE channel_selection ADD COLUMN selection_state TEXT NOT NULL DEFAULT 'included'"
+                )
+            if "pinned" not in selection_columns:
+                conn.execute(
+                    "ALTER TABLE channel_selection ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0"
+                )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_results_channel_rank ON channel_results(channel_key, selected_rank)"
+            )
+            conn.commit()
+        finally:
+            return_db_connection(db_path, conn)
 
-CONFIG_SCHEMA = {
-    **{key: ConfigRule(kind="boolean") for key in BOOLEAN_KEYS},
-    # ``urls_limit`` is retained as a backwards-compatible alias.  New
-    # configurations should use the output and speed-test settings below.
-    "urls_limit": ConfigRule(kind="integer", minimum=1),
-    "output_urls_limit": ConfigRule(kind="integer", minimum=1),
-    "speed_test_target": ConfigRule(kind="integer", minimum=0),
-    "quick_test_target": ConfigRule(kind="integer", minimum=0),
-    "speed_test_mode": ConfigRule(kind="enum", choices=("quick", "full", "manual")),
-    "app_port": ConfigRule(kind="integer", minimum=1, maximum=65535),
-    "service_port": ConfigRule(kind="integer", minimum=1, maximum=65535),
-    "nginx_http_port": ConfigRule(kind="integer", minimum=1, maximum=65535),
-    "nginx_rtmp_port": ConfigRule(kind="integer", minimum=1, maximum=65535),
-    "local_num": ConfigRule(kind="integer", minimum=0),
-    "subscribe_num": ConfigRule(kind="integer", minimum=0),
-    "speed_test_limit": ConfigRule(kind="integer", minimum=0),
-    "speed_test_timeout": ConfigRule(kind="integer", minimum=1),
-    "stream_screenshot_timeout": ConfigRule(kind="integer", minimum=1, maximum=60),
-    "stream_screenshot_width": ConfigRule(kind="integer", minimum=160, maximum=3840),
-    "request_timeout": ConfigRule(kind="integer", minimum=1),
-    "rtmp_idle_timeout": ConfigRule(kind="integer", minimum=0),
-    "rtmp_max_streams": ConfigRule(kind="integer", minimum=1),
-    "min_speed": ConfigRule(kind="float", minimum=0),
-    "update_interval": ConfigRule(kind="float", minimum=0, allow_empty=True),
-    "update_time_position": ConfigRule(kind="enum", choices=("top", "bottom")),
-    "language": ConfigRule(kind="enum", choices=("zh_CN", "en")),
-    "update_mode": ConfigRule(kind="enum", choices=("interval", "time")),
-    "public_scheme": ConfigRule(kind="enum", choices=("http", "https")),
-    "performance_mode": ConfigRule(kind="enum", choices=tuple(PERFORMANCE_MODES)),
-    "ipv_type": ConfigRule(kind="enum", choices=("ipv4", "ipv6", "all")),
-    "logo_type": ConfigRule(kind="enum", choices=("png", "jpg", "jpeg")),
-    "rtmp_transcode_mode": ConfigRule(kind="enum", choices=("copy", "auto")),
-    "ipv_type_prefer": ConfigRule(
-        kind="list", choices=("ipv4", "ipv6", "auto")
-    ),
-    "origin_type_prefer": ConfigRule(
-        kind="list", choices=("local", "subscribe"), allow_empty=True
-    ),
-    "sort_by": ConfigRule(
-        kind="list", choices=("speed", "delay", "resolution")
-    ),
-    "source_file": ConfigRule(),
-    "final_file": ConfigRule(),
-    "update_times": ConfigRule(kind="times", allow_empty=True),
-    "time_zone": ConfigRule(kind="timezone"),
-    "public_domain": ConfigRule(),
-    "public_url": ConfigRule(kind="public_url", allow_empty=True),
-    "cdn_url": ConfigRule(allow_empty=True),
-    "http_proxy": ConfigRule(allow_empty=True),
-    "user_agent": ConfigRule(allow_empty=True),
-    "min_resolution": ConfigRule(kind="resolution"),
-    "max_resolution": ConfigRule(kind="resolution"),
-    "resolution_speed_map": ConfigRule(kind="resolution_speed_map", allow_empty=True),
-    "location": ConfigRule(allow_empty=True),
-    "isp": ConfigRule(allow_empty=True),
-    "logo_url": ConfigRule(allow_empty=True),
-}
+
+def _config_hash() -> str:
+    values = {
+        section: dict(config.config.items(section))
+        for section in config.config.sections()
+    }
+    payload = json.dumps(values, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _suggest(value, choices):
-    matches = difflib.get_close_matches(
-        str(value).lower(),
-        [str(choice).lower() for choice in choices],
-        n=1,
-        cutoff=0.6,
-    )
-    if not matches:
-        return None
-    match = matches[0]
-    return next(choice for choice in choices if str(choice).lower() == match)
-
-
-def _choice_message(choices, suggestion=None):
-    message = f"可选值为 {', '.join(choices)}"
-    if suggestion is not None:
-        message += f'；是否想填写 "{suggestion}"？'
-    return message
-
-
-def _is_usable_ipv4(address: str | None) -> bool:
+def start_run(db_path: str) -> str:
+    ensure_channel_repository(db_path)
+    run_id = uuid.uuid4().hex
+    conn = get_db_connection(db_path)
     try:
-        ip = ipaddress.ip_address(address or "")
-        return ip.version == 4 and not (ip.is_loopback or ip.is_link_local or ip.is_unspecified)
-    except ValueError:
-        return False
+        conn.execute(
+            "INSERT INTO runs(run_id, started_at, status, config_hash) VALUES (?, ?, ?, ?)",
+            (run_id, time.time(), "running", _config_hash()),
+        )
+        conn.commit()
+    finally:
+        return_db_connection(db_path, conn)
+    return run_id
 
 
-def _get_command_output(args: list[str]) -> str:
+def finish_run(db_path: str, run_id: str | None, status: str, error: str | None = None) -> None:
+    if not run_id:
+        return
+    ensure_channel_repository(db_path)
+    conn = get_db_connection(db_path)
     try:
-        return subprocess.run(
-            args,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=5,
-            **no_window_process_kwargs(),
-        ).stdout.strip()
-    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        return ""
-
-
-def _get_primary_ipv4() -> str | None:
-    if sys.platform == "win32":
-        command = (
-            "$routes = Get-NetRoute -DestinationPrefix '0.0.0.0/0' | "
-            "Sort-Object RouteMetric, InterfaceMetric; "
-            "$route = @($routes | Where-Object { $_.InterfaceAlias -notmatch "
-            "'Loopback|vEthernet|WSL|Docker|VMware|VirtualBox|TAP|TUN' })[0]; "
-            "if (-not $route) { $route = @($routes)[0] }; "
-            "if ($route) { Get-NetIPAddress -InterfaceIndex $route.InterfaceIndex "
-            "-AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike '169.254.*' } | "
-            "Select-Object -First 1 -ExpandProperty IPAddress }"
+        conn.execute(
+            "UPDATE runs SET finished_at=?, status=?, error=? WHERE run_id=?",
+            (time.time(), status, error, run_id),
         )
-        address = _get_command_output(["powershell", "-NoProfile", "-Command", command])
-        return address if _is_usable_ipv4(address) else None
-    if sys.platform == "darwin":
-        route = _get_command_output(["route", "-n", "get", "default"])
-        interface = next(
-            (
-                line.split(":", 1)[1].strip()
-                for line in route.splitlines()
-                if line.strip().startswith("interface:")
-            ),
-            None,
-        )
-        address = _get_command_output(["ipconfig", "getifaddr", interface]) if interface else ""
-        return address if _is_usable_ipv4(address) else None
-    if sys.platform.startswith("linux"):
-        route = _get_command_output(["ip", "route", "get", "1.1.1.1"])
-        match = re.search(r"\bsrc\s+(\S+)", route)
-        address = match.group(1) if match else ""
-        return address if _is_usable_ipv4(address) else None
-    return None
+        conn.commit()
+    finally:
+        return_db_connection(db_path, conn)
 
 
-def get_resolution_value(resolution_str):
-    """
-    Get resolution value from string
-    """
-    pattern = r"(\d+)[xX*](\d+)"
-    match = re.search(pattern, resolution_str)
-    if match:
-        width, height = map(int, match.groups())
-        return width * height
-    else:
+def latest_successful_run(db_path: str) -> dict[str, Any] | None:
+    ensure_channel_repository(db_path)
+    conn = get_db_connection(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT * FROM runs WHERE status='success' ORDER BY finished_at DESC LIMIT 1"
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        return_db_connection(db_path, conn)
+
+
+def _resolution_value(value: str | None) -> int:
+    try:
+        width, height = str(value).lower().replace("*", "x").split("x", 1)
+        return int(width) * int(height)
+    except (TypeError, ValueError):
         return 0
 
 
-class ConfigManager:
+def _is_valid(item: dict) -> bool:
+    return is_channel_result_valid(item, retain_special=True)
 
-    def __init__(
-        self,
-        default_config_path=None,
-        user_config_path=None,
-        environ=None,
-    ):
-        self.config = None
-        self._default_config_path = default_config_path
-        self._user_config_path = user_config_path
-        self._environ = os.environ if environ is None else environ
-        self._sources = {}
-        self._detected_public_domain = None
-        self.load()
-        self.override_config_with_env()
-        self.validate()
 
-    def __getattr__(self, name, *args, **kwargs):
-        return getattr(self.config, name, *args, **kwargs)
+def _is_measured_valid(item: dict) -> bool:
+    """A candidate is valid only after measurement, except retained sources."""
+    return _is_valid(item) and (
+        item.get("tested_at") is not None
+        or item.get("origin") in {"whitelist", "hls"}
+    )
 
-    @property
-    def open_service(self):
-        return self.config.getboolean("Settings", "open_service", fallback=True)
 
-    @property
-    def open_update(self):
-        return self.config.getboolean("Settings", "open_update", fallback=True)
-
-    @property
-    def open_use_cache(self):
-        return self.config.getboolean("Settings", "open_use_cache", fallback=True)
-
-    @property
-    def open_request(self):
-        return self.config.getboolean("Settings", "open_request", fallback=False)
-
-    @property
-    def open_filter_speed(self):
-        return self.config.getboolean(
-            "Settings", "open_filter_speed", fallback=True
-        )
-
-    @property
-    def open_filter_resolution(self):
-        return self.config.getboolean(
-            "Settings", "open_filter_resolution", fallback=True
-        )
-
-    @property
-    def open_filter_ad(self):
-        return self.config.getboolean(
-            "Settings", "open_filter_ad", fallback=True
-        )
-
-    @property
-    def ipv_type(self):
-        return self.config.get("Settings", "ipv_type", fallback="all").lower()
-
-    @property
-    def open_ipv6(self):
-        return (
-                "ipv6" in self.ipv_type or "all" in self.ipv_type
-        )
-
-    @property
-    def ipv_type_prefer(self):
-        return [
-            ipv_type_value.lower()
-            for ipv_type in self.config.get(
-                "Settings", "ipv_type_prefer", fallback=""
-            ).split(",")
-            if (ipv_type_value := ipv_type.strip())
-        ]
-
-    @property
-    def ipv6_support(self):
-        return self.config.getboolean("Settings", "ipv6_support", fallback=False)
-
-    @property
-    def origin_type_prefer(self):
-        return [
-            origin_value.lower()
-            for origin in self.config.get(
-                "Settings",
-                "origin_type_prefer",
-                fallback="",
-            ).split(",")
-            if (origin_value := origin.strip())
-        ]
-
-    @property
-    def subscribe_num(self):
-        return self.config.getint("Settings", "subscribe_num", fallback=10)
-
-    @property
-    def source_limits(self):
-        return {
-            "all": self.output_urls_limit,
-            "local": self.local_num,
-            "subscribe": self.subscribe_num,
-        }
-
-    @property
-    def min_speed(self):
-        return self.config.getfloat("Settings", "min_speed", fallback=0.5)
-
-    @property
-    def min_resolution(self):
-        return self.config.get("Settings", "min_resolution", fallback="1920x1080")
-
-    @property
-    def min_resolution_value(self):
-        return get_resolution_value(self.min_resolution)
-
-    @property
-    def max_resolution(self):
-        return self.config.get("Settings", "max_resolution", fallback="1920x1080")
-
-    @property
-    def max_resolution_value(self):
-        return get_resolution_value(self.max_resolution)
-
-    @property
-    def urls_limit(self):
-        """Deprecated compatibility alias for the per-channel output limit."""
-        return self.output_urls_limit
-
-    @property
-    def output_urls_limit(self):
-        configured = self.config.get("Settings", "output_urls_limit", fallback="").strip()
-        output_source = self._sources.get(("Settings", "output_urls_limit"))
-        legacy_source = self._sources.get(("Settings", "urls_limit"))
-        # A legacy value from the user file must continue to override the
-        # shipped default output value during migration.
-        if (
-            legacy_source
-            and legacy_source != self._default_config_path
-            and output_source == self._default_config_path
-        ):
-            return self.config.getint("Settings", "urls_limit", fallback=10)
-        if configured:
-            return max(1, int(configured))
-        return self.config.getint("Settings", "urls_limit", fallback=10)
-
-    @property
-    def speed_test_target(self):
-        """Number of valid results targeted by quick speed testing.
-
-        A value of zero follows the output limit.  ``open_full_speed_test``
-        still takes precedence and tests the entire candidate pool.
+def _refresh_channel_summary(conn, channel_key: str) -> None:
+    rows = conn.execute(
         """
-        # ``quick_test_target`` is the descriptive name used by the layered
-        # candidate model; retain ``speed_test_target`` for compatibility.
-        quick_value = self.config.getint("Settings", "quick_test_target", fallback=0)
-        value = quick_value or self.config.getint("Settings", "speed_test_target", fallback=0)
-        return self.output_urls_limit if value <= 0 else value
+        SELECT speed, delay, resolution, valid, selected_rank, tested_at
+        FROM channel_results
+        WHERE channel_key=?
+        """,
+        (channel_key,),
+    ).fetchall()
+    valid_rows = [row for row in rows if row[3]]
+    speeds = [
+        row[0]
+        for row in valid_rows
+        if isinstance(row[0], (int, float)) and math.isfinite(row[0])
+    ]
+    delays = [
+        row[1]
+        for row in valid_rows
+        if isinstance(row[1], (int, float)) and math.isfinite(row[1]) and row[1] >= 0
+    ]
+    resolutions = [row[2] for row in valid_rows if row[2]]
+    health = "healthy" if len(valid_rows) >= 2 else "warning" if valid_rows else "offline"
+    conn.execute(
+        """
+        UPDATE channels SET
+            total_results=?, untested_results=?, valid_results=?, selected_results=?, best_speed=?,
+            min_delay=?, max_resolution=?, health=?, updated_at=?
+        WHERE channel_key=?
+        """,
+        (
+            len(rows),
+            sum(row[5] is None for row in rows),
+            len(valid_rows),
+            sum(row[4] is not None for row in rows),
+            max(speeds, default=None),
+            min(delays, default=None),
+            max(resolutions, key=_resolution_value, default=None),
+            health,
+            time.time(),
+            channel_key,
+        ),
+    )
 
-    @property
-    def quick_test_target(self):
-        """Compatibility/readability alias for :attr:`speed_test_target`."""
-        return self.speed_test_target
 
-    @property
-    def speed_test_mode(self):
-        """Return the explicit speed-test workflow with legacy migration."""
-        mode = self.config.get("Settings", "speed_test_mode", fallback="").strip().lower()
-        mode_source = self._sources.get(("Settings", "speed_test_mode"))
-        legacy_source = self._sources.get(("Settings", "open_speed_test"))
-        full_source = self._sources.get(("Settings", "open_full_speed_test"))
-        if (
-            mode_source == self._default_config_path
-            and (
-                (legacy_source and legacy_source != self._default_config_path)
-                or (full_source and full_source != self._default_config_path)
-            )
-        ):
-            if not self.config.getboolean("Settings", "open_speed_test", fallback=True):
-                return "manual"
-            return "full" if self.config.getboolean("Settings", "open_full_speed_test", fallback=False) else "quick"
-        if mode in {"quick", "full", "manual"}:
-            return mode
-        if not self.config.getboolean("Settings", "open_speed_test", fallback=True):
-            return "manual"
-        return "full" if self.open_full_speed_test else "quick"
-
-    @property
-    def open_url_info(self):
-        return self.config.getboolean("Settings", "open_url_info", fallback=True)
-
-    @property
-    def source_file(self):
-        return self.config.get("Settings", "source_file", fallback="config/demo.txt")
-
-    @property
-    def final_file(self):
-        return self.config.get("Settings", "final_file", fallback="output/result.txt")
-
-    @property
-    def open_m3u_result(self):
-        return self.config.getboolean("Settings", "open_m3u_result", fallback=True)
-
-    @property
-    def open_subscribe(self):
-        return self.config.getboolean("Settings", f"open_subscribe", fallback=True)
-
-    @property
-    def open_method(self):
-        return {
-            "epg": self.open_epg,
-            "local": self.open_local,
-            "subscribe": self.open_subscribe,
+def _merge_channel_items(base_items: list, tested_items: list, selected_items: list) -> list[dict]:
+    merged: dict[str, dict] = {}
+    tested_keys = set()
+    selected_ranks = {}
+    for item in base_items or []:
+        if not isinstance(item, dict) or not item.get("url"):
+            continue
+        key = stable_result_id(item["url"], item.get("headers"))
+        merged[key] = {**item, "id": key}
+    for item in tested_items or []:
+        if not isinstance(item, dict) or not item.get("url"):
+            continue
+        key = stable_result_id(item["url"], item.get("headers"))
+        merged[key] = {**merged.get(key, {}), **item, "id": key}
+        tested_keys.add(key)
+    for rank, item in enumerate(selected_items or [], start=1):
+        if not isinstance(item, dict) or not item.get("url"):
+            continue
+        key = stable_result_id(item["url"], item.get("headers"))
+        merged[key] = {**merged.get(key, {}), **item, "id": key}
+        selected_ranks[key] = rank
+    now = time.time()
+    return [
+        {
+            **item,
+            "result_key": key,
+            "selected_rank": selected_ranks.get(key),
+            "tested_at": now if key in tested_keys else None,
         }
+        for key, item in merged.items()
+    ]
 
-    @property
-    def open_history(self):
-        return self.config.getboolean("Settings", "open_history", fallback=True)
 
-    @property
-    def open_speed_test(self):
-        return self.config.getboolean("Settings", "open_speed_test", fallback=True)
+def sync_channel_snapshot(
+        db_path: str,
+        base_data: dict,
+        tested_data: dict | None = None,
+        selected_data: dict | None = None,
+        run_id: str | None = None,
+) -> None:
+    ensure_channel_repository(db_path)
+    tested_data = tested_data or {}
+    selected_data = selected_data or {}
+    now = time.time()
+    manual_selections = _load_manual_selections(db_path)
+    existing_conn = get_db_connection(db_path)
+    try:
+        existing_updated_at = dict(existing_conn.execute("SELECT channel_key, updated_at FROM channels").fetchall())
+    finally:
+        return_db_connection(db_path, existing_conn)
+    channel_rows = []
+    result_rows = []
+    channel_keys = set()
 
-    @property
-    def open_stream_screenshot(self):
-        return self.config.getboolean("Settings", "open_stream_screenshot", fallback=False)
+    for category, channel_map in (base_data or {}).items():
+        for name, base_items in (channel_map or {}).items():
+            channel_key = stable_channel_id(category, name)
+            channel_keys.add(channel_key)
+            selected_for_output = selected_data.get(category, {}).get(name, [])
+            manual_keys = manual_selections.get(channel_key)
+            if manual_keys is not None:
+                pool = {}
+                for item in (
+                    list(base_items or [])
+                    + list(tested_data.get(category, {}).get(name, []) or [])
+                    + list(selected_for_output or [])
+                ):
+                    if isinstance(item, dict) and item.get("url"):
+                        pool[stable_result_id(item["url"], item.get("headers"))] = item
+                selected_for_output = [pool[key] for key in manual_keys if key in pool]
+            if category != t("content.unmatch_channel"):
+                selected_for_output = selected_for_output[: config.output_urls_limit]
+            items = _merge_channel_items(
+                base_items,
+                tested_data.get(category, {}).get(name, []),
+                selected_for_output,
+            )
+            valid_items = [item for item in items if _is_measured_valid(item)]
+            tested_items = [item for item in items if item.get("tested_at")]
+            selected_items = [item for item in items if item.get("selected_rank") is not None]
+            speeds = [float(item["speed"]) for item in valid_items if isinstance(item.get("speed"), (int, float)) and not math.isinf(item["speed"])]
+            delays = [float(item["delay"]) for item in valid_items if isinstance(item.get("delay"), (int, float)) and item["delay"] >= 0]
+            resolutions = [item.get("resolution") for item in valid_items if item.get("resolution")]
+            health = "healthy" if len(valid_items) >= 2 else "warning" if valid_items else "offline"
+            if not tested_data.get(category, {}).get(name) and not selected_items:
+                health = "unknown"
+            tested_times = [item.get("tested_at") for item in items if item.get("tested_at")]
+            updated_at = max(tested_times, default=existing_updated_at.get(channel_key, now))
+            channel_rows.append((
+                channel_key,
+                category,
+                name,
+                len(items),
+                max(0, len(items) - len(tested_items)),
+                len(valid_items),
+                len(selected_items),
+                max(speeds, default=None),
+                min(delays, default=None),
+                max(resolutions, key=_resolution_value, default=None),
+                health,
+                updated_at,
+            ))
+            for item in items:
+                extra_data = {
+                    "date": item.get("date"),
+                    "catchup": item.get("catchup"),
+                    "tvg_logo": item.get("tvg_logo"),
+                    "extra_info": item.get("extra_info"),
+                }
+                result_rows.append((
+                    channel_key,
+                    item["result_key"],
+                    item.get("url"),
+                    item.get("host"),
+                    json.dumps(item.get("headers"), ensure_ascii=False, sort_keys=True) if item.get("headers") else None,
+                    item.get("origin"),
+                    item.get("ipv_type"),
+                    item.get("location"),
+                    item.get("isp"),
+                    item.get("speed"),
+                    item.get("delay"),
+                    item.get("resolution"),
+                    item.get("fps"),
+                    item.get("video_codec"),
+                    item.get("audio_codec"),
+                    int(bool(item.get("supply"))),
+                    int(_is_measured_valid(item)),
+                    item.get("test_status") or ("valid" if _is_measured_valid(item) else None),
+                    item.get("error_type"),
+                    item.get("selected_rank"),
+                    item.get("tested_at"),
+                    now,
+                    json.dumps(extra_data, ensure_ascii=False, sort_keys=True),
+                ))
 
-    @property
-    def stream_screenshot_timeout(self):
-        return self.config.getint("Settings", "stream_screenshot_timeout", fallback=5)
-
-    @property
-    def stream_screenshot_width(self):
-        return self.config.getint("Settings", "stream_screenshot_width", fallback=640)
-
-    @property
-    def open_update_time(self):
-        return self.config.getboolean("Settings", "open_update_time", fallback=True)
-
-    @property
-    def request_timeout(self):
-        return self.config.getint("Settings", "request_timeout", fallback=10)
-
-    @property
-    def speed_test_timeout(self):
-        return self.config.getint("Settings", "speed_test_timeout", fallback=10)
-
-    @property
-    def open_empty_category(self):
-        return self.config.getboolean("Settings", "open_empty_category", fallback=True)
-
-    @property
-    def app_port(self):
-        return self.config.getint("Settings", "app_port", fallback=5180)
-
-    @property
-    def service_port(self):
-        legacy_port = self.config.getint("Settings", "nginx_http_port", fallback=8080)
-        if not self.config.has_option("Settings", "service_port"):
-            return legacy_port
-        service_source = self._sources.get(("Settings", "service_port"))
-        legacy_source = self._sources.get(("Settings", "nginx_http_port"))
-        if (
-            service_source == self._default_config_path
-            and legacy_source
-            and legacy_source != self._default_config_path
-        ):
-            return legacy_port
-        return self.config.getint("Settings", "service_port", fallback=legacy_port)
-
-    @property
-    def nginx_http_port(self):
-        """Backward-compatible alias for the user-facing HTTP service port."""
-        return self.service_port
-
-    @property
-    def nginx_rtmp_port(self):
-        return self.config.getint("Settings", "nginx_rtmp_port", fallback=1935)
-
-    @property
-    def open_supply(self):
-        return self.config.getboolean("Settings", "open_supply", fallback=False)
-
-    @property
-    def sort_by(self):
-        raw = self.config.get("Settings", "sort_by", fallback="speed")
-        allowed = ("speed", "delay", "resolution")
-        result = [s.strip().lower() for s in str(raw).split(",") if s.strip().lower() in allowed]
-        return result or ["speed"]
-
-    @property
-    def update_time_position(self):
-        return self.config.get("Settings", "update_time_position", fallback="top")
-
-    @property
-    def time_zone(self):
-        return self.config.get("Settings", "time_zone", fallback="Asia/Shanghai")
-
-    @property
-    def open_local(self):
-        return self.config.getboolean("Settings", "open_local", fallback=True)
-
-    @property
-    def local_num(self):
-        return self.config.getint("Settings", "local_num", fallback=10)
-
-    @property
-    def speed_test_filter_host(self):
-        return self.config.getboolean("Settings", "speed_test_filter_host", fallback=False)
-
-    @property
-    def cdn_urls(self):
-        raw = self.config.get("Settings", "cdn_url", fallback="")
-        return [u.strip() for u in re.split(r"[,\n]", raw) if u.strip()]
-
-    @property
-    def cdn_url(self):
-        urls = self.cdn_urls
-        return urls[0] if urls else ""
-
-    @property
-    def open_rtmp(self):
-        return not self._environ.get("GITHUB_ACTIONS") and self.config.getboolean("Settings", "open_rtmp", fallback=True)
-
-    @property
-    def rtmp_available(self):
-        if not self.open_rtmp:
-            return False
-        if sys.platform != "darwin":
-            return True
-        from utils.rtmp_runtime import rtmp_runtime_status
-        return rtmp_runtime_status().get("available", False)
-
-    @property
-    def open_headers(self):
-        return self.config.getboolean("Settings", "open_headers", fallback=True)
-
-    @property
-    def user_agent(self):
-        return self.config.get("Settings", "user_agent", fallback="").strip()
-
-    @property
-    def open_epg(self):
-        return self.config.getboolean("Settings", "open_epg", fallback=True)
-
-    @property
-    def open_subscribe_epg(self):
-        return self.config.getboolean("Settings", "open_subscribe_epg", fallback=False)
-
-    @property
-    def speed_test_limit(self):
-        return self.config.getint("Settings", "speed_test_limit", fallback=0)
-
-    @property
-    def performance_mode(self):
-        mode = self.config.get("Settings", "performance_mode", fallback="auto").lower()
-        return mode if mode in PERFORMANCE_MODES else "auto"
-
-    @property
-    def performance_settings(self):
-        return get_performance_settings(self.performance_mode, self.speed_test_limit)
-
-    @property
-    def location(self):
-        return [
-            l.strip()
-            for l in self.config.get(
-                "Settings", "location", fallback=""
-            ).split(",")
-            if l.strip()
-        ]
-
-    @property
-    def isp(self):
-        return [
-            i.strip()
-            for i in self.config.get(
-                "Settings", "isp", fallback=""
-            ).split(",")
-            if i.strip()
-        ]
-
-    @property
-    def update_mode(self):
-        return self.config.get("Settings", "update_mode", fallback="interval")
-
-    @property
-    def update_interval(self):
-        raw = self.config.get("Settings", "update_interval", fallback="12")
-        if raw is None or str(raw).strip() == "":
-            return None
+    with _LOCK:
+        conn = get_db_connection(db_path)
         try:
-            return float(raw)
-        except (ValueError, TypeError):
-            return 12.0
-
-    @property
-    def update_times(self):
-        return self.config.get("Settings", "update_times", fallback="")
-
-    @property
-    def update_startup(self):
-        return self.config.getboolean("Settings", "update_startup", fallback=True)
-
-    @property
-    def logo_url(self):
-        return self.config.get("Settings", "logo_url", fallback="")
-
-    @property
-    def logo_type(self):
-        return self.config.get("Settings", "logo_type", fallback="png")
-
-    @property
-    def open_subscribe_logo(self):
-        return self.config.getboolean("Settings", "open_subscribe_logo", fallback=True)
-
-    @property
-    def rtmp_idle_timeout(self):
-        return self.config.getint("Settings", "rtmp_idle_timeout", fallback=300)
-
-    @property
-    def rtmp_max_streams(self):
-        return self.config.getint("Settings", "rtmp_max_streams", fallback=10)
-
-    @property
-    def rtmp_transcode_mode(self):
-        return (self.config.get("Settings", "rtmp_transcode_mode", fallback="copy") or "copy").lower()
-
-    @property
-    def public_scheme(self):
-        return self.config.get("Settings", "public_scheme", fallback="http") or "http"
-
-    @property
-    def public_url(self):
-        return self.config.get("Settings", "public_url", fallback="").strip().rstrip("/")
-
-    @property
-    def public_domain(self):
-        cfg = self.config.get("Settings", "public_domain", fallback="127.0.0.1")
-        if cfg and cfg != "127.0.0.1":
-            return cfg
-        if self._detected_public_domain is None:
-            self._detected_public_domain = _get_primary_ipv4()
-            if not self._detected_public_domain:
-                try:
-                    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    try:
-                        s.connect(("8.8.8.8", 80))
-                        ip = s.getsockname()[0]
-                    finally:
-                        s.close()
-                    if ip and not ip.startswith("127."):
-                        self._detected_public_domain = ip
-                except Exception:
-                    pass
-            self._detected_public_domain = self._detected_public_domain or cfg
-        return self._detected_public_domain
-
-    @property
-    def public_port(self):
-        env = self._environ.get("PUBLIC_PORT")
-        if env:
-            return int(env)
-        return self.service_port if self.rtmp_available else self.app_port
-
-    def environment_override_name(self, key: str) -> str | None:
-        source_key = key
-        if key == "service_port":
-            service_source = self._sources.get(("Settings", "service_port"))
-            legacy_source = self._sources.get(("Settings", "nginx_http_port"))
-            if (
-                service_source == self._default_config_path
-                and legacy_source
-                and legacy_source != self._default_config_path
-            ):
-                source_key = "nginx_http_port"
-        source = self._sources.get(("Settings", source_key), "")
-        prefix = "环境变量 "
-        return source[len(prefix):] if source.startswith(prefix) else None
-
-    @property
-    def language(self):
-        return self.config.get("Settings", "language", fallback="zh_CN")
-
-    @property
-    def http_proxy(self):
-        return self.config.get("Settings", "http_proxy", fallback="").strip()
-
-    @property
-    def open_realtime_write(self):
-        return self.config.getboolean("Settings", "open_realtime_write", fallback=True)
-
-    @property
-    def open_full_speed_test(self):
-        return self.config.getboolean("Settings", "open_full_speed_test", fallback=False)
-
-    @property
-    def resolution_speed_map(self):
-        mapping = {}
-        for item in self.config.get("Settings", "resolution_speed_map", fallback="").split(","):
-            if ":" in item:
-                resolution_part, speed_part = item.split(":", 1)
-                resolution = resolution_part.strip()
-                try:
-                    speed = float(speed_part.strip())
-                    mapping[resolution] = speed
-                except ValueError:
-                    pass
-        return mapping
-
-    @property
-    def open_unmatch_category(self):
-        return self.config.getboolean("Settings", "open_unmatch_category", fallback=False)
-
-    @property
-    def open_auto_disable_source(self):
-        return self.config.getboolean("Settings", "open_auto_disable_source", fallback=False)
-
-    def load(self):
-        """
-        Load the config
-        """
-        self._detected_public_domain = None
-        self.config = configparser.ConfigParser(interpolation=None)
-        if self._user_config_path is None:
-            self._user_config_path = resource_path(
-                "config/user_config.ini", persistent=True
+            conn.execute("PRAGMA foreign_keys=ON")
+            conn.execute("BEGIN IMMEDIATE")
+            conn.executemany(
+                """
+                INSERT INTO channels(
+                    channel_key, category, name, total_results, untested_results, selection_mode,
+                    valid_results, selected_results, best_speed, min_delay, max_resolution, health, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(channel_key) DO UPDATE SET
+                    category=excluded.category, name=excluded.name, total_results=excluded.total_results,
+                    untested_results=excluded.untested_results,
+                    selection_mode=CASE WHEN channels.selection_mode='manual' THEN 'manual' ELSE excluded.selection_mode END,
+                    valid_results=excluded.valid_results, selected_results=excluded.selected_results,
+                    best_speed=excluded.best_speed, min_delay=excluded.min_delay,
+                    max_resolution=excluded.max_resolution, health=excluded.health,
+                    updated_at=excluded.updated_at
+                """,
+                [
+                    (*row[:5], "manual" if stable_channel_id(row[1], row[2]) in manual_selections else "auto", *row[5:])
+                    for row in channel_rows
+                ],
             )
-        if self._default_config_path is None:
-            self._default_config_path = (
-                os.path.join(sys._MEIPASS, "config/config.ini")
-                if getattr(sys, "frozen", False)
-                else resource_path("config/config.ini")
+            conn.execute("DELETE FROM channel_results")
+            conn.executemany(
+                """
+                INSERT INTO channel_results(
+                    channel_key, result_key, url, host, headers, origin, ipv_type, location, isp,
+                    speed, delay, resolution, fps, video_codec, audio_codec, supply, valid,
+                    test_status, error_type, selected_rank, tested_at, last_seen_at, extra_data
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                result_rows,
             )
-
-        # user config overwrites default config
-        config_files = [self._default_config_path, self._user_config_path]
-        for config_file in config_files:
-            if os.path.exists(config_file):
-                incoming = configparser.ConfigParser(interpolation=None)
-                try:
-                    with open(config_file, "r", encoding="utf-8") as f:
-                        incoming.read_file(f, source=config_file)
-                except (OSError, configparser.Error) as exc:
-                    raise ConfigValidationError([
-                        ConfigIssue(
-                            config_file,
-                            None,
-                            None,
-                            None,
-                            f"无法读取配置：{exc}",
+            if run_id:
+                conn.executemany(
+                    """
+                    INSERT OR REPLACE INTO candidate_history(
+                        run_id, channel_key, result_key, url, origin,
+                        first_seen_at, last_seen_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            run_id,
+                            row[0],
+                            row[1],
+                            row[2],
+                            row[5],
+                            now,
+                            now,
                         )
-                    ]) from exc
-                for section in incoming.sections():
-                    if not self.config.has_section(section):
-                        self.config.add_section(section)
-                    for key, value in incoming.items(section, raw=True):
-                        self.config.set(section, key, value)
-                        self._sources[(section, key)] = config_file
-
-    def override_config_with_env(self):
-        for section in self.config.sections():
-            for key in self.config[section]:
-                section_key = f"{section}_{key}"
-                candidates = (key, key.upper(), section_key, section_key.upper())
-                for env_name in candidates:
-                    env_val = self._environ.get(env_name)
-                    if env_val is not None:
-                        # Empty Compose placeholders must not clear values saved
-                        # in the mounted configuration.
-                        if (
-                            key in {"public_url", "http_proxy"}
-                            and not str(env_val).strip()
-                        ):
-                            continue
-                        self.config.set(section, key, env_val)
-                        self._sources[(section, key)] = f"环境变量 {env_name}"
-                        break
-
-    def _source(self, section, key):
-        return self._sources.get((section, key), "配置")
-
-    def _issue(self, section, key, value, message):
-        return ConfigIssue(
-            self._source(section, key),
-            section,
-            key,
-            value,
-            message,
-        )
-
-    def _validate_value(self, section, key, value, rule):
-        value = str(value).strip()
-        if not value:
-            if rule.allow_empty:
-                return []
-            return [self._issue(section, key, value, "值不能为空")]
-
-        if rule.kind == "boolean":
-            choices = ("True", "False")
-            normalized = value.lower()
-            if normalized not in {"true", "false"}:
-                return [
-                    self._issue(
-                        section,
-                        key,
-                        value,
-                        _choice_message(choices, _suggest(value, choices)),
-                    )
-                ]
-            return []
-
-        if rule.kind in {"integer", "float"}:
-            try:
-                number = int(value) if rule.kind == "integer" else float(value)
-            except ValueError:
-                expected = "整数" if rule.kind == "integer" else "数字"
-                return [self._issue(section, key, value, f"应为{expected}")]
-            if isinstance(number, float) and not math.isfinite(number):
-                return [self._issue(section, key, value, "应为有限数字")]
-            if rule.minimum is not None and number < rule.minimum:
-                return [
-                    self._issue(
-                        section,
-                        key,
-                        value,
-                        f"不能小于 {rule.minimum:g}",
-                    )
-                ]
-            if rule.maximum is not None and number > rule.maximum:
-                return [
-                    self._issue(
-                        section,
-                        key,
-                        value,
-                        f"不能大于 {rule.maximum:g}",
-                    )
-                ]
-            return []
-
-        if rule.kind == "enum":
-            if value not in rule.choices:
-                return [
-                    self._issue(
-                        section,
-                        key,
-                        value,
-                        _choice_message(rule.choices, _suggest(value, rule.choices)),
-                    )
-                ]
-            return []
-
-        if rule.kind == "list":
-            items = [item.strip() for item in value.split(",") if item.strip()]
-            invalid = [item for item in items if item not in rule.choices]
-            if not items:
-                return [self._issue(section, key, value, "至少需要填写一个值")]
-            if invalid:
-                invalid_value = invalid[0]
-                return [
-                    self._issue(
-                        section,
-                        key,
-                        value,
-                        f'"{invalid_value}" 无效；'
-                        + _choice_message(
-                            rule.choices,
-                            _suggest(invalid_value, rule.choices),
-                        ),
-                    )
-                ]
-            if len(items) != len(set(items)):
-                return [self._issue(section, key, value, "不能包含重复值")]
-            return []
-
-        if rule.kind == "times":
-            invalid = [
-                item.strip()
-                for item in value.split(",")
-                if item.strip()
-                and not re.fullmatch(
-                    r"(?:[01]\d|2[0-3]):[0-5]\d",
-                    item.strip(),
+                        for row in result_rows
+                    ],
                 )
-            ]
-            if invalid:
-                return [
-                    self._issue(
-                        section,
-                        key,
-                        value,
-                        f'"{invalid[0]}" 格式错误，应为 HH:MM，多个时间用英文逗号分隔',
-                    )
-                ]
-            return []
-
-        if rule.kind == "timezone":
-            try:
-                pytz.timezone(value)
-            except pytz.UnknownTimeZoneError:
-                return [
-                    self._issue(
-                        section,
-                        key,
-                        value,
-                        "不是有效的 IANA 时区，例如 Asia/Shanghai",
-                    )
-                ]
-            return []
-
-        if rule.kind == "public_url":
-            try:
-                parts = urlsplit(value)
-                if (
-                    parts.scheme not in {"http", "https"}
-                    or not parts.hostname
-                    or parts.username
-                    or parts.password
-                    or parts.query
-                    or parts.fragment
-                ):
-                    raise ValueError
-                _ = parts.port
-            except ValueError:
-                return [
-                    self._issue(
-                        section,
-                        key,
-                        value,
-                        "应为完整的 HTTP(S) 地址，例如 https://iptv.example.com",
-                    )
-                ]
-            return []
-
-        if rule.kind == "resolution":
-            match = re.fullmatch(r"(\d+)[xX*](\d+)", value)
-            if not match or any(int(part) <= 0 for part in match.groups()):
-                return [
-                    self._issue(
-                        section,
-                        key,
-                        value,
-                        "应为有效分辨率，例如 1920x1080",
-                    )
-                ]
-            return []
-
-        if rule.kind == "resolution_speed_map":
-            issues = []
-            for item in value.split(","):
-                parts = item.split(":", 1)
-                if len(parts) != 2 or not re.fullmatch(
-                    r"\d+[xX*]\d+",
-                    parts[0].strip(),
-                ):
-                    issues.append(
-                        self._issue(
-                            section,
-                            key,
-                            value,
-                            f'"{item.strip()}" 格式错误，应为 分辨率:速率',
-                        )
-                    )
-                    continue
-                width, height = re.split(r"[xX*]", parts[0].strip())
-                if int(width) <= 0 or int(height) <= 0:
-                    issues.append(
-                        self._issue(
-                            section,
-                            key,
-                            value,
-                            f'"{item.strip()}" 的分辨率必须大于 0',
-                        )
-                    )
-                    continue
-                try:
-                    speed = float(parts[1].strip())
-                    if not math.isfinite(speed) or speed < 0:
-                        raise ValueError
-                except ValueError:
-                    issues.append(
-                        self._issue(
-                            section,
-                            key,
-                            value,
-                            f'"{item.strip()}" 的速率应为不小于 0 的数字',
-                        )
-                    )
-            return issues
-
-        return []
-
-    def validate(self):
-        issues = []
-        known_sections = {"Settings"}
-        for section in self.config.sections():
-            if section not in known_sections:
-                issues.append(
-                    ConfigIssue(
-                        self._source(section, ""),
-                        section,
-                        None,
-                        None,
-                        "未知配置分组",
-                    )
+                conn.executemany(
+                    """
+                    INSERT INTO candidate_pool(
+                        channel_key, result_key, url, origin, first_seen_at,
+                        last_seen_at, last_run_id, seen_count
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+                    ON CONFLICT(channel_key, result_key) DO UPDATE SET
+                        url=excluded.url,
+                        origin=excluded.origin,
+                        last_seen_at=excluded.last_seen_at,
+                        last_run_id=excluded.last_run_id,
+                        seen_count=candidate_pool.seen_count + 1
+                    """,
+                    [
+                        (row[0], row[1], row[2], row[5], now, now, run_id)
+                        for row in result_rows
+                    ],
                 )
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO candidate_measurements(
+                        run_id, channel_key, result_key, speed, delay, resolution,
+                        fps, video_codec, audio_codec, valid, test_status, error_type,
+                        tested_at, measured_at
+                    )
+                    SELECT ?, channel_key, result_key, speed, delay, resolution,
+                           fps, video_codec, audio_codec, valid, test_status, error_type,
+                           tested_at, ?
+                    FROM channel_results
+                    WHERE tested_at IS NOT NULL
+                    """,
+                    (run_id, now),
+                )
+            if channel_keys:
+                conn.execute(
+                    "CREATE TEMP TABLE IF NOT EXISTS current_channel_keys(channel_key TEXT PRIMARY KEY)"
+                )
+                conn.execute("DELETE FROM current_channel_keys")
+                conn.executemany(
+                    "INSERT INTO current_channel_keys(channel_key) VALUES (?)",
+                    [(key,) for key in channel_keys],
+                )
+                conn.execute(
+                    """
+                    DELETE FROM channels
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM current_channel_keys
+                        WHERE current_channel_keys.channel_key=channels.channel_key
+                    )
+                    """
+                )
+                conn.execute("DELETE FROM current_channel_keys")
+            else:
+                conn.execute("DELETE FROM channels")
+            if run_id:
+                conn.execute("DELETE FROM output_snapshots WHERE run_id=?", (run_id,))
+                conn.execute(
+                    """
+                    INSERT INTO output_snapshots(run_id, channel_key, result_key, output_rank, exported_at)
+                    SELECT ?, channel_key, result_key, selected_rank, ?
+                    FROM channel_results
+                    WHERE selected_rank IS NOT NULL
+                    """,
+                    (run_id, now),
+                )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            return_db_connection(db_path, conn)
+
+
+def list_categories(db_path: str, search: str = "") -> list[dict[str, Any]]:
+    ensure_channel_repository(db_path)
+    conn = get_db_connection(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        where = ""
+        params = []
+        if search:
+            where = "WHERE name LIKE ? OR category LIKE ?"
+            params.extend([f"%{search}%", f"%{search}%"])
+        rows = conn.execute(
+            f"""
+            SELECT category, COUNT(*) AS channel_count,
+                   SUM(CASE WHEN health='healthy' THEN 1 ELSE 0 END) AS healthy_count,
+                   SUM(CASE WHEN health='warning' THEN 1 ELSE 0 END) AS warning_count,
+                   SUM(CASE WHEN health='offline' THEN 1 ELSE 0 END) AS offline_count,
+                   SUM(valid_results) AS valid_results
+            FROM channels {where} GROUP BY category ORDER BY category
+            """,
+            params,
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        return_db_connection(db_path, conn)
+
+
+def count_channels(
+    db_path: str,
+    channel_keys: list[str] | None = None,
+    search: str = "",
+) -> int:
+    ensure_channel_repository(db_path)
+    keys = list(dict.fromkeys(key for key in (channel_keys or []) if key))
+    if channel_keys is not None and not keys:
+        return 0
+    conn = get_db_connection(db_path)
+    try:
+        if channel_keys is None:
+            clauses = []
+            params = []
+            if search:
+                clauses.append("(name LIKE ? OR category LIKE ?)")
+                params.extend([f"%{search}%", f"%{search}%"])
+            where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+            return int(conn.execute(f"SELECT COUNT(*) FROM channels{where}", params).fetchone()[0])
+        total = 0
+        for batch in _batches(keys):
+            placeholders = ",".join("?" for _ in batch)
+            params = list(batch)
+            search_clause = ""
+            if search:
+                search_clause = " AND (name LIKE ? OR category LIKE ?)"
+                params.extend([f"%{search}%", f"%{search}%"])
+            total += int(conn.execute(
+                f"SELECT COUNT(*) FROM channels WHERE channel_key IN ({placeholders}){search_clause}",
+                params,
+            ).fetchone()[0])
+        return total
+    finally:
+        return_db_connection(db_path, conn)
+
+
+def list_channels(
+    db_path: str,
+    category: str | None = None,
+    search: str = "",
+    health: str | None = None,
+) -> list[dict[str, Any]]:
+    ensure_channel_repository(db_path)
+    conn = get_db_connection(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        clauses = []
+        params = []
+        if category:
+            clauses.append("category=?")
+            params.append(category)
+        if health:
+            clauses.append("health=?")
+            params.append(health)
+        if search:
+            clauses.append("(name LIKE ? OR category LIKE ?)")
+            params.extend([f"%{search}%", f"%{search}%"])
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = conn.execute(
+            f"""
+            SELECT channels.*,
+                   (
+                       SELECT channel_results.url
+                       FROM channel_results
+                       WHERE channel_results.channel_key=channels.channel_key
+                         AND channel_results.url IS NOT NULL
+                         AND channel_results.url != ''
+                         AND channel_results.valid = 1
+                       ORDER BY selected_rank IS NULL, selected_rank, valid DESC, speed DESC, delay ASC
+                       LIMIT 1
+                   ) AS best_url,
+                   COALESCE(NULLIF(channels.logo, ''), (
+                       SELECT json_extract(channel_results.extra_data, '$.tvg_logo')
+                       FROM channel_results
+                       WHERE channel_results.channel_key=channels.channel_key
+                         AND json_extract(channel_results.extra_data, '$.tvg_logo') IS NOT NULL
+                         AND json_extract(channel_results.extra_data, '$.tvg_logo') != ''
+                       LIMIT 1
+                   )) AS logo
+            FROM channels {where} ORDER BY category, name
+            """,
+            params,
+        ).fetchall()
+        result = [dict(row) for row in rows]
+        logo_root = resource_path(constants.channel_logo_path)
+        logo_type = config.logo_type
+        logo_url = config.logo_url.rstrip("/") if config.logo_url else ""
+        local_logos = {}
+        try:
+            with os.scandir(logo_root) as entries:
+                suffix = f".{logo_type}"
+                local_logos = {
+                    entry.name[:-len(suffix)]: entry.path
+                    for entry in entries
+                    if entry.name.endswith(suffix) and entry.is_file()
+                }
+        except OSError:
+            pass
+        for row in result:
+            if row.get("logo"):
                 continue
-            for key, value in self.config.items(section, raw=True):
-                rule = CONFIG_SCHEMA.get(key)
-                if rule is None:
-                    suggestion = difflib.get_close_matches(
-                        key,
-                        CONFIG_SCHEMA,
-                        n=1,
-                        cutoff=0.6,
-                    )
-                    message = "未知配置项"
-                    if suggestion:
-                        message += f'；是否想填写 "{suggestion[0]}"？'
-                    issues.append(self._issue(section, key, None, message))
-                    continue
-                issues.extend(self._validate_value(section, key, value, rule))
+            local_logo = local_logos.get(row["name"])
+            if local_logo:
+                row["logo"] = local_logo
+            elif logo_url:
+                row["logo"] = f"{logo_url}/{row['name']}.{logo_type}"
+        return result
+    finally:
+        return_db_connection(db_path, conn)
 
-        if self.config.has_section("Settings"):
-            min_value = get_resolution_value(
-                self.config.get("Settings", "min_resolution", fallback="")
-            )
-            max_value = get_resolution_value(
-                self.config.get("Settings", "max_resolution", fallback="")
-            )
-            if min_value and max_value and min_value > max_value:
-                issues.append(
-                    self._issue(
-                        "Settings",
-                        "max_resolution",
-                        self.config.get("Settings", "max_resolution"),
-                        "不能小于 min_resolution",
-                    )
-                )
 
-            if self.config.getboolean("Settings", "open_rtmp", fallback=True):
-                ports = {
-                    "app_port": self.app_port,
-                    "service_port": self.service_port,
-                    "nginx_rtmp_port": self.nginx_rtmp_port,
-                }
-                duplicates = {
-                    port
-                    for port in ports.values()
-                    if list(ports.values()).count(port) > 1
-                }
-                for key, port in ports.items():
-                    if port in duplicates:
-                        issues.append(
-                            self._issue(
-                                "Settings",
-                                key,
-                                str(port),
-                                "开启 RTMP 时，内部 API、HTTP 服务和 RTMP 端口不能相同",
-                            )
-                        )
+def list_channel_results(db_path: str, channel_key: str) -> list[dict[str, Any]]:
+    ensure_channel_repository(db_path)
+    conn = get_db_connection(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            """
+            SELECT channel_results.*,
+                   stream_screenshots.filename AS screenshot_filename,
+                   stream_screenshots.status AS screenshot_status,
+                   stream_screenshots.captured_at AS screenshot_captured_at,
+                   stream_screenshots.attempted_at AS screenshot_attempted_at,
+                   stream_screenshots.width AS screenshot_width,
+                   stream_screenshots.height AS screenshot_height,
+                   stream_screenshots.error AS screenshot_error
+            FROM channel_results
+            LEFT JOIN stream_screenshots
+              ON stream_screenshots.result_key=channel_results.result_key
+            WHERE channel_results.channel_key=?
+            ORDER BY selected_rank IS NULL, selected_rank, valid DESC, speed DESC, delay ASC
+            """,
+            (channel_key,),
+        ).fetchall()
+        result = []
+        for row in rows:
+            item = dict(row)
+            item["test_state"] = "tested" if item.get("tested_at") else "untested"
+            item["headers"] = json.loads(item["headers"]) if item.get("headers") else None
+            item["extra_data"] = json.loads(item["extra_data"]) if item.get("extra_data") else {}
+            result.append(item)
+        return result
+    finally:
+        return_db_connection(db_path, conn)
 
-        public_port = self._environ.get("PUBLIC_PORT")
-        if public_port is not None:
-            try:
-                parsed_public_port = int(public_port)
-                if not 1 <= parsed_public_port <= 65535:
-                    raise ValueError
-            except (TypeError, ValueError):
-                issues.append(
-                    ConfigIssue(
-                        "环境变量 PUBLIC_PORT",
-                        None,
-                        "PUBLIC_PORT",
-                        str(public_port),
-                        "应为 1～65535 的整数",
-                    )
-                )
 
-        if issues:
-            raise ConfigValidationError(issues)
+def get_stream_screenshot(db_path: str, result_key: str) -> dict[str, Any] | None:
+    ensure_channel_repository(db_path)
+    conn = get_db_connection(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT * FROM stream_screenshots WHERE result_key=?",
+            (result_key,),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        return_db_connection(db_path, conn)
 
-    def set(self, section, key, value):
-        """
-        Set the config
-        """
-        self.config.set(section, key, value)
-        self._sources[(section, key)] = "运行时配置"
 
-    def save(self):
-        """
-        Save config with write
-        """
-        self.validate()
-        user_config_path = self._user_config_path
-        if not os.path.exists(user_config_path):
-            user_config_dir = os.path.dirname(user_config_path)
-            if user_config_dir:
-                os.makedirs(user_config_dir, exist_ok=True)
-        with open(user_config_path, "w", encoding="utf-8") as configfile:
-            self.config.write(configfile)
-
-    def copy(self, path="config"):
-        """
-        Copy config files to current directory
-        """
-        dest_folder = os.path.join(os.getcwd(), path)
+def upsert_stream_screenshot(db_path: str, screenshot: dict) -> None:
+    ensure_channel_repository(db_path)
+    values = (
+        screenshot.get("result_key"),
+        screenshot.get("filename"),
+        screenshot.get("status") or "failed",
+        screenshot.get("captured_at"),
+        screenshot.get("attempted_at") or time.time(),
+        screenshot.get("width"),
+        screenshot.get("height"),
+        screenshot.get("error"),
+    )
+    with _LOCK:
+        conn = get_db_connection(db_path)
         try:
-            src_dir = (
-                os.path.join(sys._MEIPASS, path)
-                if getattr(sys, "frozen", False)
-                else resource_path(path)
+            conn.execute(
+                """
+                INSERT INTO stream_screenshots(
+                    result_key, filename, status, captured_at, attempted_at,
+                    width, height, error
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(result_key) DO UPDATE SET
+                    filename=excluded.filename,
+                    status=excluded.status,
+                    captured_at=excluded.captured_at,
+                    attempted_at=excluded.attempted_at,
+                    width=excluded.width,
+                    height=excluded.height,
+                    error=excluded.error
+                """,
+                values,
             )
-            if os.path.exists(src_dir):
-                if not os.path.exists(dest_folder):
-                    os.makedirs(dest_folder, exist_ok=True)
-
-                for root, _, files in os.walk(src_dir):
-                    for file in files:
-                        src_file_path = os.path.join(root, file)
-                        relative_path = os.path.relpath(src_file_path, src_dir)
-                        dest_file_path = os.path.join(dest_folder, relative_path)
-
-                        dest_file_dir = os.path.dirname(dest_file_path)
-                        if not os.path.exists(dest_file_dir):
-                            os.makedirs(dest_file_dir, exist_ok=True)
-
-                        if not os.path.exists(dest_file_path):
-                            shutil.copy(src_file_path, dest_file_path)
-        except Exception as e:
-            print(f"Failed to copy files: {str(e)}")
+            conn.commit()
+        finally:
+            return_db_connection(db_path, conn)
 
 
-config = ConfigManager()
+def prune_stream_screenshots(
+    db_path: str,
+    screenshot_dir: str = constants.screenshot_dir,
+) -> dict[str, int]:
+    ensure_channel_repository(db_path)
+    os.makedirs(screenshot_dir, exist_ok=True)
+    with _LOCK:
+        conn = get_db_connection(db_path)
+        try:
+            active_keys = {
+                row[0]
+                for row in conn.execute("SELECT DISTINCT result_key FROM channel_results")
+            }
+            stored_rows = list(
+                conn.execute("SELECT result_key, filename FROM stream_screenshots")
+            )
+            orphan_rows = [row for row in stored_rows if row[0] not in active_keys]
+            if orphan_rows:
+                conn.executemany(
+                    "DELETE FROM stream_screenshots WHERE result_key=?",
+                    [(row[0],) for row in orphan_rows],
+                )
+            conn.commit()
+        finally:
+            return_db_connection(db_path, conn)
+
+    referenced = {
+        filename
+        for result_key, filename in stored_rows
+        if result_key in active_keys and filename
+    }
+    removed = 0
+    temporary = 0
+    for filename in os.listdir(screenshot_dir):
+        path = os.path.join(screenshot_dir, filename)
+        if not os.path.isfile(path):
+            continue
+        is_temporary = filename.startswith(".")
+        if is_temporary or filename not in referenced:
+            try:
+                os.unlink(path)
+                removed += 1
+                temporary += int(is_temporary)
+            except OSError:
+                pass
+    return {
+        "records": len(orphan_rows),
+        "files": removed,
+        "temporary_files": temporary,
+    }
+
+
+def list_streamable_results(db_path: str) -> list[dict[str, Any]]:
+    ensure_channel_repository(db_path)
+    conn = get_db_connection(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            """
+            SELECT c.channel_key, c.category, c.name AS channel_name,
+                   r.result_key, r.url, r.selected_rank, r.speed, r.delay,
+                   r.resolution, r.video_codec, r.audio_codec
+            FROM channel_results r
+            JOIN channels c ON c.channel_key=r.channel_key
+            WHERE r.selected_rank IS NOT NULL
+              AND r.url IS NOT NULL
+              AND r.url != ''
+            ORDER BY c.category, c.name, r.selected_rank
+            """
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        return_db_connection(db_path, conn)
+
+
+def get_channel(db_path: str, channel_key: str) -> dict[str, Any] | None:
+    ensure_channel_repository(db_path)
+    conn = get_db_connection(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute("SELECT * FROM channels WHERE channel_key=?", (channel_key,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        return_db_connection(db_path, conn)
+
+
+def upsert_manual_channel(db_path: str, category: str, name: str) -> str:
+    ensure_channel_repository(db_path)
+    channel_key = stable_channel_id(category, name)
+    conn = get_db_connection(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO channels(
+                channel_key, category, name, total_results, valid_results, selected_results,
+                health, updated_at
+            ) VALUES (?, ?, ?, 0, 0, 0, 'unknown', ?)
+            ON CONFLICT(channel_key) DO UPDATE SET
+                category=excluded.category, name=excluded.name, updated_at=excluded.updated_at
+            """,
+            (channel_key, category, name, time.time()),
+        )
+        conn.commit()
+    finally:
+        return_db_connection(db_path, conn)
+    return channel_key
+
+
+def delete_channel_records(db_path: str, channel_keys: list[str]) -> int:
+    keys = list(dict.fromkeys(key for key in channel_keys if key))
+    if not keys:
+        return 0
+    ensure_channel_repository(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        conn.execute("PRAGMA foreign_keys=ON")
+        result_keys = []
+        for batch in _batches(keys):
+            placeholders = ",".join("?" for _ in batch)
+            result_keys.extend(
+                row[0]
+                for row in conn.execute(
+                    f"SELECT result_key FROM channel_results WHERE channel_key IN ({placeholders})",
+                    batch,
+                )
+            )
+        result_keys = list(dict.fromkeys(result_keys))
+        deleted = 0
+        for batch in _batches(keys):
+            placeholders = ",".join("?" for _ in batch)
+            cursor = conn.execute(
+                f"DELETE FROM channels WHERE channel_key IN ({placeholders})",
+                batch,
+            )
+            deleted += cursor.rowcount
+        if result_keys:
+            remaining = set()
+            for batch in _batches(result_keys):
+                placeholders = ",".join("?" for _ in batch)
+                remaining.update(
+                    row[0]
+                    for row in conn.execute(
+                        f"SELECT DISTINCT result_key FROM channel_results WHERE result_key IN ({placeholders})",
+                        batch,
+                    )
+                )
+            orphaned = [key for key in result_keys if key not in remaining]
+            for batch in _batches(orphaned):
+                placeholders = ",".join("?" for _ in batch)
+                conn.execute(
+                    f"DELETE FROM stream_samples WHERE result_key IN ({placeholders})",
+                    batch,
+                )
+                conn.execute(
+                    f"DELETE FROM stream_screenshots WHERE result_key IN ({placeholders})",
+                    batch,
+                )
+        conn.commit()
+        return deleted
+    finally:
+        return_db_connection(db_path, conn)
+
+
+def delete_channel_results(
+    db_path: str,
+    channel_key: str,
+    result_keys: list[str],
+) -> list[str]:
+    keys = list(dict.fromkeys(str(key) for key in result_keys if key))
+    if not channel_key or not keys:
+        return []
+    ensure_channel_repository(db_path)
+    with _LOCK:
+        conn = get_db_connection(db_path)
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            existing_set = set()
+            for batch in _batches(keys):
+                placeholders = ",".join("?" for _ in batch)
+                existing_set.update(
+                    row[0]
+                    for row in conn.execute(
+                        f"""
+                        SELECT result_key
+                        FROM channel_results
+                        WHERE channel_key=? AND result_key IN ({placeholders})
+                        """,
+                        [channel_key, *batch],
+                    )
+                )
+            existing = [key for key in keys if key in existing_set]
+            if not existing:
+                conn.commit()
+                return []
+            for batch in _batches(existing):
+                placeholders = ",".join("?" for _ in batch)
+                conn.execute(
+                    f"""
+                    DELETE FROM channel_results
+                    WHERE channel_key=? AND result_key IN ({placeholders})
+                    """,
+                    [channel_key, *batch],
+                )
+            remaining = set()
+            for batch in _batches(existing):
+                placeholders = ",".join("?" for _ in batch)
+                remaining.update(
+                    row[0]
+                    for row in conn.execute(
+                        f"SELECT DISTINCT result_key FROM channel_results WHERE result_key IN ({placeholders})",
+                        batch,
+                    )
+                )
+            orphaned = [key for key in existing if key not in remaining]
+            for batch in _batches(orphaned):
+                placeholders = ",".join("?" for _ in batch)
+                conn.execute(
+                    f"DELETE FROM stream_samples WHERE result_key IN ({placeholders})",
+                    batch,
+                )
+                conn.execute(
+                    f"DELETE FROM stream_screenshots WHERE result_key IN ({placeholders})",
+                    batch,
+                )
+            _refresh_channel_summary(conn, channel_key)
+            conn.commit()
+            return existing
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            return_db_connection(db_path, conn)
+
+
+def add_manual_result(db_path: str, channel_key: str, url: str) -> str:
+    ensure_channel_repository(db_path)
+    result_key = stable_result_id(url, None)
+    host = urlparse(url).hostname
+    now = time.time()
+    conn = get_db_connection(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO channel_results(
+                channel_key, result_key, url, host, origin, supply, valid,
+                selected_rank, tested_at, last_seen_at, extra_data
+            ) VALUES (?, ?, ?, ?, 'local', 0, 0, NULL, NULL, ?, '{}')
+            ON CONFLICT(channel_key, result_key) DO UPDATE SET
+                url=excluded.url, host=excluded.host, origin='local', last_seen_at=excluded.last_seen_at
+            """,
+            (channel_key, result_key, url, host, now),
+        )
+        conn.execute(
+            """
+            UPDATE channels SET
+                total_results=(SELECT COUNT(*) FROM channel_results WHERE channel_key=?),
+                updated_at=? WHERE channel_key=?
+            """,
+            (channel_key, now, channel_key),
+        )
+        conn.commit()
+    finally:
+        return_db_connection(db_path, conn)
+    return result_key
+
+
+def list_result_urls_by_channel(
+    db_path: str,
+    channel_keys: list[str] | None = None,
+    origin: str | None = None,
+) -> dict[str, list[str]]:
+    ensure_channel_repository(db_path)
+    keys = list(dict.fromkeys(key for key in (channel_keys or []) if key))
+    conn = get_db_connection(db_path)
+    try:
+        result: dict[str, list[str]] = {}
+        if channel_keys is None:
+            batches = [None]
+        else:
+            batches = list(_batches(keys))
+        for batch in batches:
+            if batch is None:
+                where = " WHERE origin=?" if origin else ""
+                rows = conn.execute(
+                    f"SELECT channel_key, url FROM channel_results{where}",
+                    [origin] if origin else [],
+                ).fetchall()
+            elif batch:
+                placeholders = ",".join("?" for _ in batch)
+                origin_clause = " AND origin=?" if origin else ""
+                rows = conn.execute(
+                    f"SELECT channel_key, url FROM channel_results WHERE channel_key IN ({placeholders}){origin_clause}",
+                    [*batch, origin] if origin else batch,
+                ).fetchall()
+            else:
+                rows = []
+            for channel_key, url in rows:
+                result.setdefault(channel_key, []).append(url)
+        return result
+    finally:
+        return_db_connection(db_path, conn)
+
+
+def set_channel_logo(db_path: str, channel_key: str, logo: str) -> None:
+    ensure_channel_repository(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        conn.execute("UPDATE channels SET logo=?, updated_at=? WHERE channel_key=?", (logo.strip(), time.time(), channel_key))
+        conn.commit()
+    finally:
+        return_db_connection(db_path, conn)
+
+
+def update_result_measurement(db_path: str, channel_key: str, result_key: str, measurement: dict) -> None:
+    ensure_channel_repository(db_path)
+    test_status = measurement.get("test_status")
+    failed_statuses = {"timeout", "request_error", "probe_error", "cancelled", "unreachable"}
+    stale_measurement = test_status in failed_statuses or measurement.get("delay") in {-1, None}
+    measurement_valid = _is_valid(measurement) and not stale_measurement
+    values = (
+        None if stale_measurement else measurement.get("speed"),
+        None if stale_measurement else measurement.get("delay"),
+        None if stale_measurement else measurement.get("resolution"),
+        None if stale_measurement else measurement.get("fps"),
+        None if stale_measurement else measurement.get("video_codec"),
+        None if stale_measurement else measurement.get("audio_codec"),
+        int(measurement_valid),
+        test_status or ("valid" if measurement_valid else "invalid"),
+        measurement.get("error_type"),
+        time.time(),
+        channel_key,
+        result_key,
+    )
+    with _LOCK:
+        conn = get_db_connection(db_path)
+        try:
+            conn.execute(
+                """
+                UPDATE channel_results SET
+                    speed=?, delay=?, resolution=?, fps=?, video_codec=?, audio_codec=?,
+                    valid=?, test_status=?, error_type=?, tested_at=?
+                    WHERE channel_key=? AND result_key=?
+                """,
+                values,
+            )
+            latest_run = conn.execute(
+                "SELECT run_id FROM runs ORDER BY started_at DESC LIMIT 1"
+            ).fetchone()
+            if latest_run:
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO candidate_measurements(
+                        run_id, channel_key, result_key, speed, delay, resolution,
+                        fps, video_codec, audio_codec, valid, test_status, error_type,
+                        tested_at, measured_at
+                    )
+                    SELECT ?, channel_key, result_key, speed, delay, resolution,
+                           fps, video_codec, audio_codec, valid, test_status, error_type,
+                           tested_at, ?
+                    FROM channel_results
+                    WHERE channel_key=? AND result_key=?
+                    """,
+                    (latest_run[0], time.time(), channel_key, result_key),
+                )
+            conn.commit()
+        finally:
+            return_db_connection(db_path, conn)
+
+
+def set_channel_selection(
+    db_path: str,
+    channel_key: str,
+    selected: list[dict],
+    mode: str = "manual",
+) -> None:
+    ensure_channel_repository(db_path)
+    selected = selected[: config.output_urls_limit]
+    selected_ranks = {
+        stable_result_id(item.get("url", ""), item.get("headers")): rank
+        for rank, item in enumerate(selected, start=1)
+        if item.get("url")
+    }
+    with _LOCK:
+        conn = get_db_connection(db_path)
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("UPDATE channel_results SET selected_rank=NULL WHERE channel_key=?", (channel_key,))
+            conn.executemany(
+                "UPDATE channel_results SET selected_rank=? WHERE channel_key=? AND result_key=?",
+                [(rank, channel_key, result_key) for result_key, rank in selected_ranks.items()],
+            )
+            conn.execute("DELETE FROM channel_selection WHERE channel_key=?", (channel_key,))
+            if mode == "manual":
+                conn.executemany(
+                    """
+                    INSERT INTO channel_selection(
+                        channel_key, result_key, selection_rank,
+                        selection_state, pinned, updated_at
+                    ) VALUES (?, ?, ?, 'included', 0, ?)
+                    """,
+                    [
+                        (channel_key, result_key, rank, time.time())
+                        for result_key, rank in selected_ranks.items()
+                    ],
+                )
+            conn.execute(
+                "UPDATE channels SET selection_mode=? WHERE channel_key=?",
+                ("manual" if mode == "manual" else "auto", channel_key),
+            )
+            rows = conn.execute(
+                "SELECT speed, delay, resolution, valid FROM channel_results WHERE channel_key=?",
+                (channel_key,),
+            ).fetchall()
+            valid_rows = [row for row in rows if row[3]]
+            speeds = [row[0] for row in valid_rows if isinstance(row[0], (int, float)) and not math.isinf(row[0])]
+            delays = [row[1] for row in valid_rows if isinstance(row[1], (int, float)) and row[1] >= 0]
+            resolutions = [row[2] for row in valid_rows if row[2]]
+            health = "healthy" if len(valid_rows) >= 2 else "warning" if valid_rows else "offline"
+            conn.execute(
+                """
+                UPDATE channels SET valid_results=?, selected_results=?, best_speed=?, min_delay=?,
+                    max_resolution=?, health=?, updated_at=? WHERE channel_key=?
+                """,
+                (
+                    len(valid_rows),
+                    len(selected_ranks),
+                    max(speeds, default=None),
+                    min(delays, default=None),
+                    max(resolutions, key=_resolution_value, default=None),
+                    health,
+                    time.time(),
+                    channel_key,
+                ),
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            return_db_connection(db_path, conn)
+
+
+def _auto_selection_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Order measured candidates using the configured automatic policy."""
+    dimensions = list(config.sort_by)
+
+    def number(value, default):
+        try:
+            value = float(value)
+            return value if math.isfinite(value) else default
+        except (TypeError, ValueError):
+            return default
+
+    def key(row):
+        # Whitelist/HLS entries are intentionally retained and should remain
+        # ahead of ordinary probe results, matching the export sorter.
+        retained = 0 if row.get("origin") in {"whitelist", "hls"} else 1
+        values = []
+        for dimension in dimensions:
+            if dimension == "speed":
+                values.append(-number(row.get("speed"), -math.inf))
+            elif dimension == "delay":
+                values.append(number(row.get("delay"), math.inf))
+            else:
+                values.append(-_resolution_value(row.get("resolution")))
+        return retained, *values, str(row.get("result_key") or "")
+
+    return sorted(
+        [row for row in rows if _is_measured_valid(row)],
+        key=key,
+    )
+
+
+def reset_channel_selection(db_path: str, channel_key: str) -> None:
+    """Clear manual preferences and immediately recompute automatic output."""
+    ensure_channel_repository(db_path)
+    with _LOCK:
+        conn = get_db_connection(db_path)
+        try:
+            conn.execute("DELETE FROM channel_selection WHERE channel_key=?", (channel_key,))
+            conn.execute(
+                "UPDATE channels SET selection_mode='auto', updated_at=? WHERE channel_key=?",
+                (time.time(), channel_key),
+            )
+            conn.commit()
+        finally:
+            return_db_connection(db_path, conn)
+    rows = list_channel_results(db_path, channel_key)
+    set_channel_selection(db_path, channel_key, _auto_selection_rows(rows), mode="auto")
+
+
+def auto_select_channel(db_path: str, channel_key: str) -> list[dict[str, Any]]:
+    """Recompute and persist automatic output selection for one channel."""
+    rows = list_channel_results(db_path, channel_key)
+    selected = _auto_selection_rows(rows)[: config.output_urls_limit]
+    set_channel_selection(db_path, channel_key, selected, mode="auto")
+    return selected
+
+
+def _load_manual_selections(db_path: str) -> dict[str, list[str]]:
+    ensure_channel_repository(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        rows = conn.execute(
+            """
+            SELECT c.channel_key, s.result_key
+            FROM channels c
+            LEFT JOIN channel_selection s ON s.channel_key=c.channel_key
+            WHERE c.selection_mode='manual'
+            ORDER BY c.channel_key, s.selection_rank IS NULL, s.selection_rank
+            """
+        ).fetchall()
+        result: dict[str, list[str]] = {}
+        for channel_key, result_key in rows:
+            result.setdefault(channel_key, [])
+            if result_key:
+                result[channel_key].append(result_key)
+        return result
+    finally:
+        return_db_connection(db_path, conn)
+
+
+def load_selected_snapshot(db_path: str) -> dict:
+    ensure_channel_repository(db_path)
+    conn = get_db_connection(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        result = {}
+        channels = conn.execute("SELECT category, name FROM channels ORDER BY category, name").fetchall()
+        for channel in channels:
+            result.setdefault(channel["category"], {}).setdefault(channel["name"], [])
+        rows = conn.execute(
+            """
+            SELECT c.category, c.name, r.* FROM channel_results r
+            JOIN channels c ON c.channel_key=r.channel_key
+            WHERE r.selected_rank IS NOT NULL
+            ORDER BY c.category, c.name, r.selected_rank
+            """
+        ).fetchall()
+        for raw in rows:
+            row = dict(raw)
+            row["id"] = row["result_key"]
+            row["headers"] = json.loads(row["headers"]) if row.get("headers") else None
+            row.update(json.loads(row["extra_data"]) if row.get("extra_data") else {})
+            result.setdefault(row["category"], {}).setdefault(row["name"], []).append(row)
+        return result
+    finally:
+        return_db_connection(db_path, conn)
+
+
+def list_output_snapshot(db_path: str, run_id: str) -> list[dict[str, Any]]:
+    ensure_channel_repository(db_path)
+    conn = get_db_connection(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            """
+            SELECT s.*, c.category, c.name
+            FROM output_snapshots s
+            JOIN channels c ON c.channel_key=s.channel_key
+            WHERE s.run_id=?
+            ORDER BY c.category, c.name, s.output_rank
+            """,
+            (run_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        return_db_connection(db_path, conn)
+
+
+def list_candidate_history(
+    db_path: str,
+    channel_key: str | None = None,
+    result_key: str | None = None,
+    limit: int = 1000,
+) -> list[dict[str, Any]]:
+    """Return discovered candidates recorded for completed collection runs."""
+    ensure_channel_repository(db_path)
+    conn = get_db_connection(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        clauses = []
+        params: list[Any] = []
+        if channel_key:
+            clauses.append("h.channel_key=?")
+            params.append(channel_key)
+        if result_key:
+            clauses.append("h.result_key=?")
+            params.append(result_key)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(max(1, int(limit)))
+        rows = conn.execute(
+            f"""
+            SELECT h.*, r.started_at, r.finished_at, r.status AS run_status
+            FROM candidate_history h
+            LEFT JOIN runs r ON r.run_id=h.run_id
+            {where}
+            ORDER BY h.last_seen_at DESC
+            LIMIT ?
+            """,
+            params,
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        return_db_connection(db_path, conn)
+
+
+def list_candidate_pool(
+    db_path: str,
+    channel_key: str | None = None,
+    include_stale: bool = True,
+    limit: int = 1000,
+) -> list[dict[str, Any]]:
+    """List the stable, deduplicated candidate pool across collection runs."""
+    ensure_channel_repository(db_path)
+    conn = get_db_connection(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        clauses = []
+        params: list[Any] = []
+        if channel_key:
+            clauses.append("p.channel_key=?")
+            params.append(channel_key)
+        if not include_stale:
+            clauses.append(
+                "p.last_seen_at >= COALESCE((SELECT started_at FROM runs WHERE run_id=p.last_run_id), 0)"
+            )
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(max(1, int(limit)))
+        rows = conn.execute(
+            f"SELECT p.* FROM candidate_pool p {where} ORDER BY p.last_seen_at DESC LIMIT ?",
+            params,
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        return_db_connection(db_path, conn)
+
+
+def list_candidate_measurements(
+    db_path: str,
+    channel_key: str | None = None,
+    result_key: str | None = None,
+    limit: int = 1000,
+) -> list[dict[str, Any]]:
+    """Return per-run measurement snapshots for candidate quality history."""
+    ensure_channel_repository(db_path)
+    conn = get_db_connection(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        clauses = []
+        params: list[Any] = []
+        if channel_key:
+            clauses.append("m.channel_key=?")
+            params.append(channel_key)
+        if result_key:
+            clauses.append("m.result_key=?")
+            params.append(result_key)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(max(1, int(limit)))
+        rows = conn.execute(
+            f"""
+            SELECT m.*, r.started_at, r.finished_at, r.status AS run_status
+            FROM candidate_measurements m
+            LEFT JOIN runs r ON r.run_id=m.run_id
+            {where}
+            ORDER BY m.measured_at DESC
+            LIMIT ?
+            """,
+            params,
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        return_db_connection(db_path, conn)
+
+
+def begin_operation(db_path: str, operation: str, target_type: str, target_key: str | None) -> str:
+    ensure_channel_repository(db_path)
+    operation_id = uuid.uuid4().hex
+    conn = get_db_connection(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO operation_history(operation_id, operation, target_type, target_key, started_at, status)
+            VALUES (?, ?, ?, ?, ?, 'running')
+            """,
+            (operation_id, operation, target_type, target_key, time.time()),
+        )
+        conn.commit()
+    finally:
+        return_db_connection(db_path, conn)
+    return operation_id
+
+
+def finish_operation(db_path: str, operation_id: str, status: str, message: str = "") -> None:
+    ensure_channel_repository(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        conn.execute(
+            "UPDATE operation_history SET finished_at=?, status=?, message=? WHERE operation_id=?",
+            (time.time(), status, message, operation_id),
+        )
+        conn.commit()
+    finally:
+        return_db_connection(db_path, conn)
+
+
+def list_operations(db_path: str, limit: int = 200) -> list[dict[str, Any]]:
+    ensure_channel_repository(db_path)
+    conn = get_db_connection(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT * FROM operation_history ORDER BY started_at DESC LIMIT ?",
+            (max(1, int(limit)),),
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        return_db_connection(db_path, conn)
+
+
+def append_stream_samples(db_path: str, sampled_at: float, streams: list[dict]) -> None:
+    if not streams:
+        return
+    ensure_channel_repository(db_path)
+    rows = [(
+        sampled_at,
+        str(stream.get("result_key") or stream.get("name") or ""),
+        int(stream.get("clients") or 0),
+        float(stream.get("bw_in") or 0),
+        float(stream.get("bw_out") or 0),
+        int(stream.get("bytes_in") or 0),
+        int(stream.get("bytes_out") or 0),
+        int(bool(stream.get("active"))),
+    ) for stream in streams if stream.get("result_key") or stream.get("name")]
+    conn = get_db_connection(db_path)
+    try:
+        conn.executemany(
+            """
+            INSERT OR REPLACE INTO stream_samples(
+                sampled_at, result_key, clients, bw_in, bw_out, bytes_in, bytes_out, active
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            rows,
+        )
+        conn.execute("DELETE FROM stream_samples WHERE sampled_at < ?", (sampled_at - 7 * 86400,))
+        conn.commit()
+    finally:
+        return_db_connection(db_path, conn)
+
+
+def result_metadata_map(db_path: str, result_keys: list[str]) -> dict[str, dict[str, Any]]:
+    keys = list(dict.fromkeys(str(key) for key in result_keys if key))
+    if not keys:
+        return {}
+    ensure_channel_repository(db_path)
+    conn = get_db_connection(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        result = {}
+        for batch in _batches(keys):
+            placeholders = ",".join("?" for _ in batch)
+            rows = conn.execute(
+                f"""
+                SELECT r.result_key, r.url, r.selected_rank, c.channel_key, c.category, c.name
+                FROM channel_results r JOIN channels c ON c.channel_key=r.channel_key
+                WHERE r.result_key IN ({placeholders})
+                """,
+                batch,
+            ).fetchall()
+            result.update({row["result_key"]: dict(row) for row in rows})
+        return result
+    finally:
+        return_db_connection(db_path, conn)
+
+
+def list_runs(db_path: str, limit: int = 100) -> list[dict[str, Any]]:
+    ensure_channel_repository(db_path)
+    conn = get_db_connection(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT * FROM runs ORDER BY started_at DESC LIMIT ?",
+            (max(1, int(limit)),),
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        return_db_connection(db_path, conn)
