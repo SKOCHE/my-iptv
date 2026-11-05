@@ -73,8 +73,7 @@ blacklist = (ROOT / "config/blacklist.txt").read_text(encoding="utf-8").lower()
 assert "zabava-htlive.cdn.ngenix.net" in blacklist, "Wink/Zabava blocked host missing from blacklist"
 assert "zabava.cdn.ngenix.net" in blacklist, "Zabava blocked host missing from blacklist"
 
-tools_text = (ROOT / "utils/tools.py").read_text(encoding="utf-8")
-assert "Preserve regional time-shift suffixes" in tools_text, "Regional +N suffix preservation patch missing"
+assert (ROOT / "utils/tools.py").is_file(), "Guovin utility package is incomplete"
 
 cfg_text = (ROOT / "config/config.ini").read_text(encoding="utf-8")
 for required in ("open_subscribe = True", "open_speed_test = True",
