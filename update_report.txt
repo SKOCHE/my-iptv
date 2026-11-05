@@ -1,77 +1,77 @@
-IPTV v11 diagnostic report
-UTC: 2026-11-05 09:39:04
+IPTV v12 expanded-source diagnostic report
+UTC: 2026-11-05 10:13:20
 IMPORTANT: FFmpeg decode confirms video availability, NOT channel identity.
 Regional target: Barnaul, Moscow time +4.
 NTV +4 and Russia 1 HD +4 are handled as explicit regional candidates.
-MIR +4 is NOT substituted with a generic/Moscow stream.
+Expanded supplemental M3U candidates are tested; decode does not prove channel identity.
 Previously reported bad domains excluded: cinerama.uz, linkintel.ru, mcquack.net, thestream.cyou
 
-DECODE OK / IDENTITY UNCONFIRMED | Шансон ТВ | id=ShansonTV.ru | match=canonical exact | 6 frames decoded; 6 non-flat | http://catchup.videoline.ru/shanson/index.m3u8
-NO DECODED STREAM | Победа | id=Pobeda.ru | match=canonical exact | candidates=1 | FFmpeg could not decode video
+DECODE OK / IDENTITY UNCONFIRMED | Шансон ТВ | id=ShansonTV.ru | match=canonical exact | source=iptv-org | 6 frames decoded; 6 non-flat | http://catchup.videoline.ru/shanson/index.m3u8
+NO DECODED STREAM | Победа | id=Pobeda.ru | match=canonical exact | candidates=2 | FFmpeg could not decode video; FFmpeg could not decode video
 PLACEHOLDER / NO VERIFIED STREAM | Победа | id=Pobeda.ru | no stream passed decode/identity filter
-NO CHANNEL ID | Viasat History | ambiguous/no exact ID: ViasatHistory.bg,ViasatHistory.cz,ViasatHistory.fi,ViasatHistory.gr,ViasatHistory.hu,ViasatHistory.ro,ViasatHistory.se,ViasatHistory.si,ViasatHistory.tr,ViasatHistory.ua
-PLACEHOLDER / NO VERIFIED STREAM | Viasat History | id=unknown | ambiguous/no exact ID: ViasatHistory.bg,ViasatHistory.cz,ViasatHistory.fi,ViasatHistory.gr,ViasatHistory.hu,ViasatHistory.ro,ViasatHistory.se,ViasatHistory.si,ViasatHistory.tr,ViasatHistory.ua
-NO CHANNEL ID | Viasat Nature | ambiguous/no exact ID: ViasatNature.bg,ViasatNature.cz,ViasatNature.fi,ViasatNature.gr,ViasatNature.hu,ViasatNature.ro,ViasatNature.se,ViasatNature.si,ViasatNature.ua
-PLACEHOLDER / NO VERIFIED STREAM | Viasat Nature | id=unknown | ambiguous/no exact ID: ViasatNature.bg,ViasatNature.cz,ViasatNature.fi,ViasatNature.gr,ViasatNature.hu,ViasatNature.ro,ViasatNature.se,ViasatNature.si,ViasatNature.ua
-DECODE OK / IDENTITY UNCONFIRMED | TV1000 Русское кино | id=vijuTV1000russkoe.ru | match=canonical exact | 6 frames decoded; 6 non-flat | http://46.53.200.153:7777/play/a01g/index.m3u8
-NO DECODED STREAM | Родное кино | id=RodnoeKino.ru | match=canonical exact | candidates=1 | FFmpeg could not decode video
+NO DECODED STREAM | Viasat History | id=regional override | match=ambiguous/no exact ID: ViasatHistory.bg,ViasatHistory.cz,ViasatHistory.fi,ViasatHistory.gr,ViasatHistory.hu,ViasatHistory.ro,ViasatHistory.se,ViasatHistory.si,ViasatHistory.tr,ViasatHistory.ua | candidates=1 | FFmpeg could not decode video
+PLACEHOLDER / NO VERIFIED STREAM | Viasat History | id=unknown | no stream passed decode/identity filter
+NO DECODED STREAM | Viasat Nature | id=regional override | match=ambiguous/no exact ID: ViasatNature.bg,ViasatNature.cz,ViasatNature.fi,ViasatNature.gr,ViasatNature.hu,ViasatNature.ro,ViasatNature.se,ViasatNature.si,ViasatNature.ua | candidates=1 | FFmpeg could not decode video
+PLACEHOLDER / NO VERIFIED STREAM | Viasat Nature | id=unknown | no stream passed decode/identity filter
+DECODE OK / IDENTITY UNCONFIRMED | TV1000 Русское кино | id=vijuTV1000russkoe.ru | match=canonical exact | source=iptv-org | 6 frames decoded; 6 non-flat | http://46.53.200.153:7777/play/a01g/index.m3u8
+NO DECODED STREAM | Родное кино | id=RodnoeKino.ru | match=canonical exact | candidates=2 | FFmpeg could not decode video; FFmpeg could not decode video
 PLACEHOLDER / NO VERIFIED STREAM | Родное кино | id=RodnoeKino.ru | no stream passed decode/identity filter
-DECODE OK / IDENTITY UNCONFIRMED | Киносерия | id=Kinoseriya.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://fs.uplink.kz/kinoseria/mono.m3u8?token=onlinetv
-NO DECODED STREAM | Наше новое кино | id=NasheNovoeKino.ru | match=canonical exact | candidates=0 | no eligible stream
+DECODE OK / IDENTITY UNCONFIRMED | Киносерия | id=Kinoseriya.ru | match=canonical exact | source=iptv-org | 6 frames decoded; 6 non-flat | https://fs.uplink.kz/kinoseria/mono.m3u8?token=onlinetv
+NO DECODED STREAM | Наше новое кино | id=NasheNovoeKino.ru | match=canonical exact | candidates=1 | FFmpeg could not decode video
 PLACEHOLDER / NO VERIFIED STREAM | Наше новое кино | id=NasheNovoeKino.ru | no stream passed decode/identity filter
-NO DECODED STREAM | ТНТ4 | id=TNT4.ru | match=canonical exact | candidates=2 | FFmpeg could not decode video; FFmpeg could not decode video
+NO DECODED STREAM | ТНТ4 | id=TNT4.ru | match=canonical exact | candidates=4 | FFmpeg could not decode video; FFmpeg could not decode video; FFmpeg could not decode video; FFmpeg could not decode video
 PLACEHOLDER / NO VERIFIED STREAM | ТНТ4 | id=TNT4.ru | no stream passed decode/identity filter
-DECODE OK / IDENTITY UNCONFIRMED | Дом кино | id=Domkino.ru | match=canonical exact | 6 frames decoded; 6 non-flat | http://88.212.15.50/live/test_dom_kino/playlist.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | Смотрим 100% Любовь | id=Smotrim100Lyubov.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://stream.smotrim.ru/hls/fasttv01/playlist_2.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | Звезда Плюс | id=ZvezdaPlus.ru | match=canonical exact | 6 frames decoded; 6 non-flat | http://tvzvezda.bonus-tv.ru/cdn/zvezdaplus/playlist.m3u8
+DECODE OK / IDENTITY UNCONFIRMED | Дом кино | id=Domkino.ru | match=canonical exact | source=iptv-org | 6 frames decoded; 6 non-flat | http://88.212.15.50/live/test_dom_kino/playlist.m3u8
+DECODE OK / IDENTITY UNCONFIRMED | Смотрим 100% Любовь | id=Smotrim100Lyubov.ru | match=canonical exact | source=iptv-org | 6 frames decoded; 6 non-flat | https://stream.smotrim.ru/hls/fasttv01/playlist_2.m3u8
+DECODE OK / IDENTITY UNCONFIRMED | Звезда Плюс | id=ZvezdaPlus.ru | match=canonical exact | source=iptv-org | 6 frames decoded; 6 non-flat | http://tvzvezda.bonus-tv.ru/cdn/zvezdaplus/playlist.m3u8
 NO DECODED STREAM | НТВ (+4) | id=NTV.ru | match=explicit Barnaul +4 URL | candidates=1 | FFmpeg could not decode video
 PLACEHOLDER / NO VERIFIED STREAM | НТВ (+4) | id=NTV.ru | no stream passed decode/identity filter
-DECODE OK / IDENTITY UNCONFIRMED | ТНТ | id=TNT.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/23.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | Пятница! | id=Friday.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://vod.tuva.ru/friday/index.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | Пятый канал | id=Channel5.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/8.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | СТС | id=STS.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/16.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | ТВ3 | id=TV3.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/18.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | Че! | id=Che.ru | match=canonical exact | 6 frames decoded; 6 non-flat | http://176.118.197.101/Che/index.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | Домашний | id=Domashniy.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/17.m3u8
+DECODE OK / IDENTITY UNCONFIRMED | ТНТ | id=TNT.ru | match=explicit channel_id | source=iptv-org | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/23.m3u8
+DECODE OK / IDENTITY UNCONFIRMED | Пятница! | id=Friday.ru | match=canonical exact | source=iptv-org | 6 frames decoded; 6 non-flat | https://vod.tuva.ru/friday/index.m3u8
+DECODE OK / IDENTITY UNCONFIRMED | Пятый канал | id=Channel5.ru | match=explicit channel_id | source=iptv-org | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/8.m3u8
+DECODE OK / IDENTITY UNCONFIRMED | СТС | id=STS.ru | match=explicit channel_id | source=iptv-org | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/16.m3u8
+DECODE OK / IDENTITY UNCONFIRMED | ТВ3 | id=TV3.ru | match=explicit channel_id | source=iptv-org | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/18.m3u8
+DECODE OK / IDENTITY UNCONFIRMED | Че! | id=Che.ru | match=canonical exact | source=iptv-org | 6 frames decoded; 6 non-flat | http://176.118.197.101/Che/index.m3u8
+DECODE OK / IDENTITY UNCONFIRMED | Домашний | id=Domashniy.ru | match=canonical exact | source=iptv-org | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/17.m3u8
 NO DECODED STREAM | КиноСезон | id=KinoSezon.ru | match=canonical exact | candidates=0 | no eligible stream
 PLACEHOLDER / NO VERIFIED STREAM | КиноСезон | id=KinoSezon.ru | no stream passed decode/identity filter
-NO DECODED STREAM | Феникс+ Кино | id=FeniksplusKino.ru | match=canonical exact | candidates=1 | FFmpeg could not decode video
+NO DECODED STREAM | Феникс+ Кино | id=FeniksplusKino.ru | match=canonical exact | candidates=2 | FFmpeg could not decode video; FFmpeg could not decode video
 PLACEHOLDER / NO VERIFIED STREAM | Феникс+ Кино | id=FeniksplusKino.ru | no stream passed decode/identity filter
 NO DECODED STREAM | Глазами туриста | id=GlazamiTurista.ru | match=canonical exact | candidates=0 | no eligible stream
 PLACEHOLDER / NO VERIFIED STREAM | Глазами туриста | id=GlazamiTurista.ru | no stream passed decode/identity filter
-NO CHANNEL ID | Перец | ambiguous/no exact ID: 
-PLACEHOLDER / NO VERIFIED STREAM | Перец | id=unknown | ambiguous/no exact ID: 
+NO DECODED STREAM | Перец | id=regional override | match=ambiguous/no exact ID:  | candidates=1 | FFmpeg could not decode video
+PLACEHOLDER / NO VERIFIED STREAM | Перец | id=unknown | no stream passed decode/identity filter
 NO DECODED STREAM | Живая планета | id=ZhivayaPlaneta.ru | match=canonical exact | candidates=1 | FFmpeg could not decode video
 PLACEHOLDER / NO VERIFIED STREAM | Живая планета | id=ZhivayaPlaneta.ru | no stream passed decode/identity filter
-NO DECODED STREAM | Русский бестселлер | id=RusskiyBestseller.ru | match=canonical exact | candidates=1 | FFmpeg could not decode video
+NO DECODED STREAM | Русский бестселлер | id=RusskiyBestseller.ru | match=canonical exact | candidates=2 | FFmpeg could not decode video; FFmpeg could not decode video
 PLACEHOLDER / NO VERIFIED STREAM | Русский бестселлер | id=RusskiyBestseller.ru | no stream passed decode/identity filter
-NO CHANNEL ID | Русская комедия | ambiguous/no exact ID: 
+NO CHANNEL ID | Русская комедия | ambiguous/no exact ID: ; no supplemental URL
 PLACEHOLDER / NO VERIFIED STREAM | Русская комедия | id=unknown | ambiguous/no exact ID: 
-NO CHANNEL ID | Премиальное HD | ambiguous/no exact ID: 
+NO CHANNEL ID | Премиальное HD | ambiguous/no exact ID: ; no supplemental URL
 PLACEHOLDER / NO VERIFIED STREAM | Премиальное HD | id=unknown | ambiguous/no exact ID: 
-NO CHANNEL ID | Наше любимое HD | ambiguous/no exact ID: 
+NO CHANNEL ID | Наше любимое HD | ambiguous/no exact ID: ; no supplemental URL
 PLACEHOLDER / NO VERIFIED STREAM | Наше любимое HD | id=unknown | ambiguous/no exact ID: 
-NO CHANNEL ID | Наш кинопоказ HD | ambiguous/no exact ID: 
+NO CHANNEL ID | Наш кинопоказ HD | ambiguous/no exact ID: ; no supplemental URL
 PLACEHOLDER / NO VERIFIED STREAM | Наш кинопоказ HD | id=unknown | ambiguous/no exact ID: 
-NO DECODED STREAM | Русский иллюзион | id=RusskiyIllusion.ru | match=canonical exact | candidates=1 | FFmpeg could not decode video
+NO DECODED STREAM | Русский иллюзион | id=RusskiyIllusion.ru | match=canonical exact | candidates=2 | FFmpeg could not decode video; FFmpeg could not decode video
 PLACEHOLDER / NO VERIFIED STREAM | Русский иллюзион | id=RusskiyIllusion.ru | no stream passed decode/identity filter
 NO DECODED STREAM | Мосфильм. Золотая коллекция | id=MosfilmGoldCollection.ru | match=canonical exact | candidates=2 | FFmpeg could not decode video; FFmpeg could not decode video
 PLACEHOLDER / NO VERIFIED STREAM | Мосфильм. Золотая коллекция | id=MosfilmGoldCollection.ru | no stream passed decode/identity filter
 NO DECODED STREAM | Россия 1 HD (+4) | id=regional override | match=explicit Barnaul +4 URL | candidates=1 | FFmpeg could not decode video
 PLACEHOLDER / NO VERIFIED STREAM | Россия 1 HD (+4) | id=unknown | no stream passed decode/identity filter
-DECODE OK / IDENTITY UNCONFIRMED | Россия 24 | id=Russia24.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://stream.smotrim.ru/hls2/russia24nl_smotrim/playlist_5.m3u8
-NO CHANNEL ID | Дом кино Премиум HD | ambiguous/no exact ID: 
-PLACEHOLDER / NO VERIFIED STREAM | Дом кино Премиум HD | id=unknown | ambiguous/no exact ID: 
-DECODE OK / IDENTITY UNCONFIRMED | Первый канал | id=ChannelOne.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/4.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | Рен ТВ | id=RENTV.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | http://185.23.80.23:8080/REN/index.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | ТВЦ | id=TVCentr.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://tvc-hls.cdnvideo.ru/tvc-res/smil:vd9221.smil/playlist.m3u8
-NO DECODED STREAM | МИР (+4) | id=Mir.ru | match=explicit channel_id | candidates=0 | no eligible stream
+DECODE OK / IDENTITY UNCONFIRMED | Россия 24 | id=Russia24.ru | match=canonical exact | source=iptv-org | 6 frames decoded; 6 non-flat | https://stream.smotrim.ru/hls2/russia24nl_smotrim/playlist_5.m3u8
+NO DECODED STREAM | Дом кино Премиум HD | id=regional override | match=ambiguous/no exact ID:  | candidates=1 | FFmpeg could not decode video
+PLACEHOLDER / NO VERIFIED STREAM | Дом кино Премиум HD | id=unknown | no stream passed decode/identity filter
+DECODE OK / IDENTITY UNCONFIRMED | Первый канал | id=ChannelOne.ru | match=explicit channel_id | source=iptv-org | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/4.m3u8
+DECODE OK / IDENTITY UNCONFIRMED | Рен ТВ | id=RENTV.ru | match=explicit channel_id | source=iptv-org | 6 frames decoded; 6 non-flat | http://185.23.80.23:8080/REN/index.m3u8
+DECODE OK / IDENTITY UNCONFIRMED | ТВЦ | id=TVCentr.ru | match=explicit channel_id | source=iptv-org | 6 frames decoded; 6 non-flat | https://tvc-hls.cdnvideo.ru/tvc-res/smil:vd9221.smil/playlist.m3u8
+NO DECODED STREAM | МИР (+4) | id=Mir.ru | match=explicit channel_id | candidates=1 | FFmpeg could not decode video
 PLACEHOLDER / NO VERIFIED STREAM | МИР (+4) | id=Mir.ru | no stream passed decode/identity filter
-DECODE OK / IDENTITY UNCONFIRMED | Звезда | id=Zvezda.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/21.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | МУЗ ТВ | id=MuzTV.ru | match=explicit channel_id | 6 frames decoded; 5 non-flat | https://streaming.televizor-24-tochka.ru/live/20.m3u8
+DECODE OK / IDENTITY UNCONFIRMED | Звезда | id=Zvezda.ru | match=explicit channel_id | source=iptv-org | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/21.m3u8
+DECODE OK / IDENTITY UNCONFIRMED | МУЗ ТВ | id=MuzTV.ru | match=explicit channel_id | source=iptv-org | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/20.m3u8
 
 SUMMARY: playable_candidates=19/41; placeholders=22; total_playlist_entries=41/41
 A PLACEHOLDER is visible in Televizo but cannot play; it is not a working stream.
 Regional +4 URLs are candidates; verify broadcast identity/time in Televizo.
-MIR (+4) is intentionally not mapped to a generic stream.
+MIR (+4) uses only the published Mir +4 candidate; verify regional time in Televizo.
 Never treat DECODE OK as visual confirmation of the named channel.
