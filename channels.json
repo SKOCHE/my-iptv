@@ -89,7 +89,8 @@
     "name": "ТНТ",
     "aliases": [
       "TNT"
-    ]
+    ],
+    "channel_id": "TNT.ru"
   },
   {
     "name": "Пятница!",
@@ -111,7 +112,8 @@
     "aliases": [
       "STS",
       "CTC"
-    ]
+    ],
+    "channel_id": "STS.ru"
   },
   {
     "name": "ТВ3",
@@ -240,14 +242,16 @@
       "Channel One",
       "1TV",
       "Perviy Kanal"
-    ]
+    ],
+    "channel_id": "ChannelOne.ru"
   },
   {
     "name": "Рен ТВ",
     "aliases": [
       "REN TV",
       "Ren TV"
-    ]
+    ],
+    "channel_id": "RENTV.ru"
   },
   {
     "name": "ТВЦ",
@@ -255,7 +259,8 @@
       "TV Center",
       "TV Centre",
       "TVC"
-    ]
+    ],
+    "channel_id": "TVCentr.ru"
   },
   {
     "name": "МИР (+4)",
@@ -269,7 +274,8 @@
     "name": "Звезда",
     "aliases": [
       "Zvezda TV"
-    ]
+    ],
+    "channel_id": "Zvezda.ru"
   },
   {
     "name": "МУЗ ТВ",
@@ -277,6 +283,7 @@
       "Muz TV",
       "MUZ-TV",
       "MuzTV"
-    ]
+    ],
+    "channel_id": "MuzTV.ru"
   }
 ]
