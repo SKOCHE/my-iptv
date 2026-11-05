@@ -21,7 +21,9 @@ def req(url,timeout=TIMEOUT,headers=None):
     if headers: h.update(headers)
     q=urllib.request.Request(url,headers=h)
     with urllib.request.urlopen(q,timeout=timeout) as r:
-        return r.status,r.headers, r.read()
+        # Bound memory/time: some IPTV servers ignore Range and stream indefinitely.
+        body = r.read(4096)
+        return r.status, r.headers, body
 def normalize(s):
     s=s.lower().replace("ё","е")
     s=re.sub(r"\([^)]*\)|\+\s*4\s*ч?|\+4h|красноярск"," ",s)
@@ -143,47 +145,83 @@ def main():
     for k,v in pinned.items(): candidates[k]=v
     log(f"MATCHED UNIQUE CANDIDATES: {len(candidates)}")
     items=list(candidates.items())
-    results={}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=int(SET["workers"])) as ex:
+    pinned={(x["channel"],x["url"]):{"source":"USER_CONFIRMED"} for x in CFG["confirmed_streams"]}
+    # Stage 1: fast parallel HTTP manifest checks for every non-pinned candidate.
+    http_results={}
+    workers=max(4,min(int(SET.get("workers",16)),24))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
         fut={ex.submit(probe_manifest,k[1]):k for k,_ in items if k not in pinned}
         for f in concurrent.futures.as_completed(fut):
             k=fut[f]
-            try: results[k]=f.result()
-            except Exception as e: results[k]=(False,str(e)[:100])
+            try: http_results[k]=f.result()
+            except Exception as e: http_results[k]=(False,str(e)[:100])
+
+    # Stage 2: FFmpeg is expensive. Decode at most 3 HTTP-reachable variants
+    # per channel in parallel. All HTTP-reachable candidates still go to the
+    # Televizo test playlist, even if they are not selected for FFmpeg.
+    by_channel={}
+    for (ch,url),rec in items:
+        if (ch,url) in pinned: continue
+        ok,detail=http_results.get((ch,url),(False,"not checked"))
+        if ok: by_channel.setdefault(ch,[]).append(((ch,url),rec))
+    decode_targets=[]
+    for ch,group in by_channel.items():
+        # Preserve deterministic source order, but cap the costly decode stage.
+        decode_targets.extend(group[:3])
+
+    decode_results={}
+    decode_workers=max(2,min(8,workers//2))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=decode_workers) as ex:
+        fut={ex.submit(decode,k[1]):k for k,_ in decode_targets}
+        for f in concurrent.futures.as_completed(fut):
+            k=fut[f]
+            try: decode_results[k]=f.result()
+            except Exception as e: decode_results[k]=(False,str(e)[:140])
+
     test=[]; main_entries=[]; summary={c:[] for c in CHANNELS}
+    decoded_per_channel={}
     for (ch,url),rec in items:
         if (ch,url) in pinned:
-            status="USER_CONFIRMED"; ok=True; src="user-confirmed"
+            status="USER_CONFIRMED"; ok=True; src="user-confirmed"; detail="confirmed by user"
         else:
-            ok,detail=results.get((ch,url),(False,"not checked"))
-            status="HTTP_OK" if ok else "HTTP_FAIL"; src=rec["source"]
-            if ok:
-                # Decode check is stronger than a manifest response; still not identity proof.
-                dec,why=decode(url)
-                status="FFMPEG_OK" if dec else "HTTP_ONLY"
-                detail=why
-            log(f"CANDIDATE | {ch} | {status} | {src} | {url}")
+            http_ok,detail=http_results.get((ch,url),(False,"not checked"))
+            src=rec["source"]
+            if not http_ok:
+                status="HTTP_FAIL"; ok=False
+            else:
+                ok=True
+                if (ch,url) in decode_results:
+                    dec,why=decode_results[(ch,url)]
+                    status="FFMPEG_OK" if dec else "HTTP_ONLY"
+                    detail=why
+                    if dec: decoded_per_channel[ch]=decoded_per_channel.get(ch,0)+1
+                else:
+                    status="HTTP_OK_NOT_DECODED"
+                    detail="HTTP manifest OK; FFmpeg cap reached for this channel"
         summary[ch].append(status)
+        log(f"CANDIDATE | {ch} | {status} | {src} | {detail} | {url}")
         if ok:
             test.append((ch,url,src,status))
-            # Main is safe: pinned or FFmpeg-decoded only. HTTP-only entries stay test-only.
-            if status in ("USER_CONFIRMED","FFMPEG_OK"): main_entries.append((ch,url,src,status))
-    # Sort by configured channel order, keep all good variants in test file.
+            if status in ("USER_CONFIRMED","FFMPEG_OK"):
+                main_entries.append((ch,url,src,status))
+
     order={c:i for i,c in enumerate(CHANNELS)}
-    test.sort(key=lambda x:(order[x[0]],x[3],x[2]))
+    test.sort(key=lambda x:(order[x[0]],x[3],x[2],x[1]))
     main_entries.sort(key=lambda x:(order[x[0]],x[3]))
     write_m3u(ROOT/"test_candidates.m3u",test)
-    # Never replace a healthy previous main playlist with an empty/short result.
     if len(main_entries)>=int(SET["min_main_entries"]):
         write_m3u(ROOT/"favorites.m3u",main_entries)
         log(f"MAIN UPDATED: {len(main_entries)} entries")
     else:
         log(f"MAIN PRESERVED: only {len(main_entries)} safe entries")
     missing=[c for c in CHANNELS if not summary[c]]
-    http_only=[c for c,vals in summary.items() if "HTTP_ONLY" in vals and "FFMPEG_OK" not in vals]
+    http_only=[c for c,vals in summary.items() if any(v in ("HTTP_ONLY","HTTP_OK_NOT_DECODED") for v in vals) and "FFMPEG_OK" not in vals]
+    log(f"HTTP CANDIDATES: {len(test)}")
+    log(f"FFMPEG DECODE TARGETS: {len(decode_targets)} (max 3 per channel)")
+    log(f"FFMPEG DECODE OK: {sum(decoded_per_channel.values())}")
     log(f"CHANNELS WITH CANDIDATES: {len(CHANNELS)-len(missing)}/{len(CHANNELS)}")
     log("NO CANDIDATE: "+", ".join(missing))
-    log("HTTP-ONLY (needs Televizo check): "+", ".join(http_only))
+    log("HTTP-ONLY / NOT DECODED (needs Televizo check): "+", ".join(http_only))
     (ROOT/"update_report.txt").write_text("\n".join(REPORT)+"\n",encoding="utf-8")
     return 0
 if __name__=="__main__": sys.exit(main())
