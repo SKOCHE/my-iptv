@@ -1,77 +1,92 @@
-IPTV v13 regional-source and diagnostics report
-UTC: 2026-11-05 10:35:20
-IMPORTANT: FFmpeg decode confirms video availability, NOT channel identity.
-Regional target: Barnaul, Moscow time +4.
-NTV +4, Russia 1 Barnaul, and MIR +4 are explicit regional candidates.
-Expanded supplemental M3U candidates are tested; decode does not prove channel identity.
-Previously reported bad domains excluded: cinerama.uz, linkintel.ru, mcquack.net, thestream.cyou
-
-DECODE OK / IDENTITY UNCONFIRMED | Шансон ТВ | id=ShansonTV.ru | match=canonical exact | source=iptv-org | 6 frames decoded; 6 non-flat | http://catchup.videoline.ru/shanson/index.m3u8
-NO DECODED STREAM | Победа | id=Pobeda.ru | match=canonical exact | candidates=2 | FFmpeg: Error opening input files: Server returned 404 Not Found; FFmpeg: Error opening input files: Invalid data found when processing input
-PLACEHOLDER / NO VERIFIED STREAM | Победа | id=Pobeda.ru | no stream passed decode/identity filter
-NO DECODED STREAM | Viasat History | id=regional override | match=ambiguous/no exact ID: ViasatHistory.bg,ViasatHistory.cz,ViasatHistory.fi,ViasatHistory.gr,ViasatHistory.hu,ViasatHistory.ro,ViasatHistory.se,ViasatHistory.si,ViasatHistory.tr,ViasatHistory.ua | candidates=1 | FFmpeg: Error opening input files: Server returned 403 Forbidden (access denied)
-PLACEHOLDER / NO VERIFIED STREAM | Viasat History | id=unknown | no stream passed decode/identity filter
-NO DECODED STREAM | Viasat Nature | id=regional override | match=ambiguous/no exact ID: ViasatNature.bg,ViasatNature.cz,ViasatNature.fi,ViasatNature.gr,ViasatNature.hu,ViasatNature.ro,ViasatNature.se,ViasatNature.si,ViasatNature.ua | candidates=1 | FFmpeg: Error opening input files: Server returned 403 Forbidden (access denied)
-PLACEHOLDER / NO VERIFIED STREAM | Viasat Nature | id=unknown | no stream passed decode/identity filter
-DECODE OK / IDENTITY UNCONFIRMED | TV1000 Русское кино | id=vijuTV1000russkoe.ru | match=canonical exact | source=iptv-org | 6 frames decoded; 6 non-flat | http://46.53.200.153:7777/play/a01g/index.m3u8
-NO DECODED STREAM | Родное кино | id=RodnoeKino.ru | match=canonical exact | candidates=2 | FFmpeg: Error opening input files: Input/output error; FFmpeg: Error opening input files: Connection timed out
-PLACEHOLDER / NO VERIFIED STREAM | Родное кино | id=RodnoeKino.ru | no stream passed decode/identity filter
-DECODE OK / IDENTITY UNCONFIRMED | Киносерия | id=Kinoseriya.ru | match=canonical exact | source=iptv-org | 6 frames decoded; 6 non-flat | https://fs.uplink.kz/kinoseria/mono.m3u8?token=onlinetv
-NO DECODED STREAM | Наше новое кино | id=NasheNovoeKino.ru | match=canonical exact | candidates=1 | FFmpeg: Error opening input files: Input/output error
-PLACEHOLDER / NO VERIFIED STREAM | Наше новое кино | id=NasheNovoeKino.ru | no stream passed decode/identity filter
-NO DECODED STREAM | ТНТ4 | id=TNT4.ru | match=canonical exact | candidates=4 | FFmpeg: Error opening input files: Server returned 403 Forbidden (access denied); FFmpeg: Error opening input files: Server returned 404 Not Found; FFmpeg: Error opening input files: Server returned 404 Not Found; FFmpeg: Error opening input files: Connection timed out
-PLACEHOLDER / NO VERIFIED STREAM | ТНТ4 | id=TNT4.ru | no stream passed decode/identity filter
-DECODE OK / IDENTITY UNCONFIRMED | Дом кино | id=Domkino.ru | match=canonical exact | source=iptv-org | 6 frames decoded; 6 non-flat | http://88.212.15.50/live/test_dom_kino/playlist.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | Смотрим 100% Любовь | id=Smotrim100Lyubov.ru | match=canonical exact | source=iptv-org | 6 frames decoded; 6 non-flat | https://stream.smotrim.ru/hls/fasttv01/playlist_2.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | Звезда Плюс | id=ZvezdaPlus.ru | match=canonical exact | source=iptv-org | 6 frames decoded; 6 non-flat | http://tvzvezda.bonus-tv.ru/cdn/zvezdaplus/playlist.m3u8
-NO DECODED STREAM | НТВ (+4) | id=NTV.ru | match=explicit Barnaul +4 URL | candidates=1 | FFmpeg: Error opening input files: Server returned 403 Forbidden (access denied)
-PLACEHOLDER / NO VERIFIED STREAM | НТВ (+4) | id=NTV.ru | no stream passed decode/identity filter
-DECODE OK / IDENTITY UNCONFIRMED | ТНТ | id=TNT.ru | match=explicit channel_id | source=iptv-org | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/23.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | Пятница! | id=Friday.ru | match=canonical exact | source=iptv-org | 6 frames decoded; 6 non-flat | https://vod.tuva.ru/friday/index.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | Пятый канал | id=Channel5.ru | match=explicit channel_id | source=iptv-org | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/8.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | СТС | id=STS.ru | match=explicit channel_id | source=iptv-org | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/16.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | ТВ3 | id=TV3.ru | match=explicit channel_id | source=iptv-org | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/18.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | Че! | id=Che.ru | match=canonical exact | source=iptv-org | 6 frames decoded; 6 non-flat | http://176.118.197.101/Che/index.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | Домашний | id=Domashniy.ru | match=canonical exact | source=iptv-org | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/17.m3u8
-NO DECODED STREAM | КиноСезон | id=KinoSezon.ru | match=canonical exact | candidates=0 | no eligible stream
-PLACEHOLDER / NO VERIFIED STREAM | КиноСезон | id=KinoSezon.ru | no stream passed decode/identity filter
-NO DECODED STREAM | Феникс+ Кино | id=FeniksplusKino.ru | match=canonical exact | candidates=2 | FFmpeg: Error opening input files: Server returned 404 Not Found; FFmpeg: Error opening input files: Connection timed out
-PLACEHOLDER / NO VERIFIED STREAM | Феникс+ Кино | id=FeniksplusKino.ru | no stream passed decode/identity filter
-NO DECODED STREAM | Глазами туриста | id=GlazamiTurista.ru | match=canonical exact | candidates=0 | no eligible stream
-PLACEHOLDER / NO VERIFIED STREAM | Глазами туриста | id=GlazamiTurista.ru | no stream passed decode/identity filter
-NO DECODED STREAM | Перец | id=regional override | match=ambiguous/no exact ID:  | candidates=1 | FFmpeg: Error opening input files: Input/output error
-PLACEHOLDER / NO VERIFIED STREAM | Перец | id=unknown | no stream passed decode/identity filter
-NO DECODED STREAM | Живая планета | id=ZhivayaPlaneta.ru | match=canonical exact | candidates=1 | FFmpeg: Error opening input files: Connection timed out
-PLACEHOLDER / NO VERIFIED STREAM | Живая планета | id=ZhivayaPlaneta.ru | no stream passed decode/identity filter
-NO DECODED STREAM | Русский бестселлер | id=RusskiyBestseller.ru | match=canonical exact | candidates=2 | FFmpeg: Error opening input files: Input/output error; FFmpeg: Error opening input files: Connection timed out
-PLACEHOLDER / NO VERIFIED STREAM | Русский бестселлер | id=RusskiyBestseller.ru | no stream passed decode/identity filter
-NO CHANNEL ID | Русская комедия | ambiguous/no exact ID: ; no supplemental URL
-PLACEHOLDER / NO VERIFIED STREAM | Русская комедия | id=unknown | ambiguous/no exact ID: 
-NO CHANNEL ID | Премиальное HD | ambiguous/no exact ID: ; no supplemental URL
-PLACEHOLDER / NO VERIFIED STREAM | Премиальное HD | id=unknown | ambiguous/no exact ID: 
-NO CHANNEL ID | Наше любимое HD | ambiguous/no exact ID: ; no supplemental URL
-PLACEHOLDER / NO VERIFIED STREAM | Наше любимое HD | id=unknown | ambiguous/no exact ID: 
-NO CHANNEL ID | Наш кинопоказ HD | ambiguous/no exact ID: ; no supplemental URL
-PLACEHOLDER / NO VERIFIED STREAM | Наш кинопоказ HD | id=unknown | ambiguous/no exact ID: 
-NO DECODED STREAM | Русский иллюзион | id=RusskiyIllusion.ru | match=canonical exact | candidates=2 | FFmpeg: Error opening input files: Input/output error; FFmpeg: Error opening input files: Connection timed out
-PLACEHOLDER / NO VERIFIED STREAM | Русский иллюзион | id=RusskiyIllusion.ru | no stream passed decode/identity filter
-NO DECODED STREAM | Мосфильм. Золотая коллекция | id=MosfilmGoldCollection.ru | match=canonical exact | candidates=2 | FFmpeg: Error opening input files: Server returned 403 Forbidden (access denied); FFmpeg: Error opening input files: Server returned 404 Not Found
-PLACEHOLDER / NO VERIFIED STREAM | Мосфильм. Золотая коллекция | id=MosfilmGoldCollection.ru | no stream passed decode/identity filter
-NO DECODED STREAM | Россия 1 HD (+4) | id=regional override | match=explicit Barnaul +4 URL | candidates=1 | FFmpeg: Error opening input files: Input/output error
-PLACEHOLDER / NO VERIFIED STREAM | Россия 1 HD (+4) | id=unknown | no stream passed decode/identity filter
-DECODE OK / IDENTITY UNCONFIRMED | Россия 24 | id=Russia24.ru | match=canonical exact | source=iptv-org | 6 frames decoded; 6 non-flat | https://stream.smotrim.ru/hls2/russia24nl_smotrim/playlist_5.m3u8
-NO DECODED STREAM | Дом кино Премиум HD | id=regional override | match=ambiguous/no exact ID:  | candidates=1 | FFmpeg: Error opening input files: Server returned 404 Not Found
-PLACEHOLDER / NO VERIFIED STREAM | Дом кино Премиум HD | id=unknown | no stream passed decode/identity filter
-DECODE OK / IDENTITY UNCONFIRMED | Первый канал | id=ChannelOne.ru | match=explicit channel_id | source=iptv-org | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/4.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | Рен ТВ | id=RENTV.ru | match=explicit channel_id | source=iptv-org | 6 frames decoded; 6 non-flat | http://185.23.80.23:8080/REN/index.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | ТВЦ | id=TVCentr.ru | match=explicit channel_id | source=iptv-org | 6 frames decoded; 5 non-flat | https://tvc-hls.cdnvideo.ru/tvc-res/smil:vd9221.smil/playlist.m3u8
-NO DECODED STREAM | МИР (+4) | id=Mir.ru | match=explicit Barnaul +4 URL | candidates=1 | FFmpeg: Error opening input files: Server returned 403 Forbidden (access denied)
-PLACEHOLDER / NO VERIFIED STREAM | МИР (+4) | id=Mir.ru | no stream passed decode/identity filter
-DECODE OK / IDENTITY UNCONFIRMED | Звезда | id=Zvezda.ru | match=explicit channel_id | source=iptv-org | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/21.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | МУЗ ТВ | id=MuzTV.ru | match=explicit channel_id | source=iptv-org | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/20.m3u8
-
-SUMMARY: playable_candidates=19/41; placeholders=22; total_playlist_entries=41/41
-A PLACEHOLDER is visible in Televizo but cannot play; it is not a working stream.
-Regional +4 URLs are candidates; verify broadcast identity/time in Televizo.
-MIR (+4) uses only the published Mir +4 candidate; verify regional time in Televizo.
-Never treat DECODE OK as visual confirmation of the named channel.
+=== SKOCHE IPTV Aggregator v2 ===
+SOURCE | https://iptv-org.github.io/iptv/countries/ru.m3u | records=23 | OK
+SOURCE | https://iptv-org.github.io/iptv/languages/rus.m3u | records=22 | OK
+SOURCE | iptv-org/iptv | records=0 | GitHub tree недоступен
+SOURCE | MaximKiselev/iptv | records=25 | OK
+SOURCE | smolnp/IPTVru | records=0 | GitHub tree недоступен
+SOURCE | boxer180/RUSSIA_TV | records=34 | OK
+SOURCE | THEROCKSSS/sorted-iptv | records=0 | GitHub tree недоступен
+SOURCE | ngrch/iptv | records=0 | GitHub tree недоступен
+SOURCE | swoldier-rus/IP_TV | records=59 | OK
+SOURCE | AdeelWajid/iptv_validated_list | records=0 | GitHub tree недоступен
+TOTAL SOURCE RECORDS: 163
+MATCHED UNIQUE CANDIDATES: 72
+CANDIDATE | Первый канал | HTTP_FAIL | MaximKiselev/iptv/playlist.m3u | <urlopen error timed out> | http://194.8.128.38:8080/ort/playlist.m3u8
+CANDIDATE | Первый канал | FFMPEG_OK | MaximKiselev/iptv/playlist.m3u | FFmpeg decode OK | https://zabava-htlive.cdn.ngenix.net/hls/CH_1TVSD/variant.m3u8
+CANDIDATE | Первый канал | FFMPEG_OK | MaximKiselev/iptv/playlist.m3u | FFmpeg decode OK | https://s14131.cdn.ngenix.net/hls/CH_R41_OTT_DV_KAM_1TV/variant.m3u8
+CANDIDATE | Первый канал | HTTP_FAIL | MaximKiselev/iptv/playlist.m3u | <urlopen error timed out> | http://77.235.1.19:8000/play/a07r/index.m3u8
+CANDIDATE | Первый канал | HTTP_FAIL | MaximKiselev/iptv/playlist.m3u | <urlopen error timed out> | http://77.235.1.19:8000/play/a073/index.m3u8
+CANDIDATE | Первый канал | HTTP_FAIL | MaximKiselev/iptv/playlist.m3u | <urlopen error timed out> | http://sc.id-tv.kz/1KanalEvraziya.m3u8
+CANDIDATE | Первый канал | FFMPEG_OK | MaximKiselev/iptv/playlist.m3u | FFmpeg decode OK | https://streaming.thestream.cyou/live/210.m3u8
+CANDIDATE | Россия 1 HD (+4) | HTTP_FAIL | MaximKiselev/iptv/playlist.m3u | <urlopen error [Errno -2] Name or service not known> | http://vgtrkregion-reg.cdnvideo.ru/vgtrk/HO3gcQAHbok/russia1-sd/index.m3u8
+CANDIDATE | Россия 1 HD (+4) | FFMPEG_OK | MaximKiselev/iptv/playlist.m3u | FFmpeg decode OK | https://zabava-htlive.cdn.ngenix.net/hls/CH_RUSSIA1/variant.m3u8
+CANDIDATE | Россия 1 HD (+4) | HTTP_FAIL | MaximKiselev/iptv/playlist.m3u | <urlopen error [Errno -2] Name or service not known> | https://vgtrkregion-reg.cdnvideo.ru/vgtrk/0/russia1-hd/1080p.m3u8
+CANDIDATE | НТВ (+4) | HTTP_FAIL | MaximKiselev/iptv/playlist.m3u | HTTP Error 403: Forbidden | http://cdn.ntv.ru/ntv0/tracks-v3a1/mono.m3u8
+CANDIDATE | НТВ (+4) | FFMPEG_OK | MaximKiselev/iptv/playlist.m3u | FFmpeg decode OK | https://zabava-htlive.cdn.ngenix.net/hls/CH_NTV/variant.m3u8
+CANDIDATE | Пятый канал | HTTP_FAIL | MaximKiselev/iptv/playlist.m3u | HTTP Error 403: Forbidden | https://streaming.televizor-24-tochka.ru/live/8-req_offset_28000000-req_window_0-1k_v5.m3u8
+CANDIDATE | Первый канал | HTTP_FAIL | boxer180/RUSSIA_TV/IPTV.m3u | <urlopen error [Errno -2] Name or service not known> | http://dmi3y-tv.ru/hls/T2/CH_1TV.m3u8
+CANDIDATE | Россия 1 HD (+4) | HTTP_FAIL | boxer180/RUSSIA_TV/IPTV.m3u | <urlopen error [Errno -2] Name or service not known> | https://radio-live-mg.rtr-vesti.ru/hls2/russia_hd/playlist_4.m3u8
+CANDIDATE | Россия 1 HD (+4) | HTTP_FAIL | boxer180/RUSSIA_TV/IPTV.m3u | <urlopen error [Errno -2] Name or service not known> | http://dmi3y-tv.ru/hls/T2/CH_RUSSIA1.m3u8
+CANDIDATE | Россия 1 HD (+4) | HTTP_FAIL | boxer180/RUSSIA_TV/IPTV.m3u | <urlopen error [Errno -2] Name or service not known> | https://vgtrkregion.cdnvideo.ru/vgtrk/simferopol/russia1sd/playlist_sdhigh.m3u8
+CANDIDATE | Россия 1 HD (+4) | HTTP_FAIL | boxer180/RUSSIA_TV/IPTV.m3u | <urlopen error [Errno -2] Name or service not known> | https://vgtrkregion-reg.cdnvideo.ru/vgtrk/abakan/russia1-sd/index.m3u8
+CANDIDATE | Россия 1 HD (+4) | HTTP_FAIL | boxer180/RUSSIA_TV/IPTV.m3u | <urlopen error [Errno -2] Name or service not known> | https://vgtrkregion-reg.cdnvideo.ru/vgtrk/arhangelsk/russia1-sd/index.m3u8
+CANDIDATE | Россия 1 HD (+4) | HTTP_FAIL | boxer180/RUSSIA_TV/IPTV.m3u | <urlopen error [Errno -2] Name or service not known> | https://vgtrkregion-reg.cdnvideo.ru/vgtrk/barnaul/russia1-sd/index.m3u8
+CANDIDATE | Россия 1 HD (+4) | HTTP_FAIL | boxer180/RUSSIA_TV/IPTV.m3u | <urlopen error [Errno -2] Name or service not known> | https://vgtrkregion-reg.cdnvideo.ru/vgtrk/bryansk/russia1-sd/index.m3u8
+CANDIDATE | Россия 1 HD (+4) | HTTP_FAIL | boxer180/RUSSIA_TV/IPTV.m3u | <urlopen error [Errno -2] Name or service not known> | https://vgtrkregion-reg.cdnvideo.ru/vgtrk/vladikavkaz/russia1-sd/index.m3u8
+CANDIDATE | Россия 1 HD (+4) | HTTP_FAIL | boxer180/RUSSIA_TV/IPTV.m3u | <urlopen error [Errno -2] Name or service not known> | https://vgtrkregion-reg.cdnvideo.ru/vgtrk/vladimir/russia1-sd/index.m3u8
+CANDIDATE | Рен ТВ | HTTP_FAIL | boxer180/RUSSIA_TV/IPTV.m3u | <urlopen error [Errno -2] Name or service not known> | http://dmi3y-tv.ru/hls/T2/CH_RENTV.m3u8
+CANDIDATE | НТВ (+4) | HTTP_FAIL | boxer180/RUSSIA_TV/IPTV.m3u | <urlopen error [Errno -2] Name or service not known> | http://dmi3y-tv.ru/hls/T2/CH_NTV.m3u8
+CANDIDATE | ТВЦ | FFMPEG_OK | boxer180/RUSSIA_TV/IPTV.m3u | FFmpeg decode OK | http://tvc-hls.cdnvideo.ru/tvc-res/smil:vd9221_2.smil/playlist.m3u8
+CANDIDATE | Пятница! | HTTP_FAIL | boxer180/RUSSIA_TV/IPTV.m3u | HTTP Error 403: Forbidden | https://bl.uma.media/live/317843/HLS/4614144_3/2/1/playlist.m3u8
+CANDIDATE | Пятница! | HTTP_FAIL | boxer180/RUSSIA_TV/IPTV.m3u | <urlopen error [Errno -2] Name or service not known> | http://dmi3y-tv.ru/hls/T2/CH_FRIDAY.m3u8
+CANDIDATE | ТВ3 | HTTP_FAIL | boxer180/RUSSIA_TV/IPTV.m3u | <urlopen error [Errno -2] Name or service not known> | http://dmi3y-tv.ru/hls/T2/CH_TV3.m3u8
+CANDIDATE | Звезда | FFMPEG_OK | boxer180/RUSSIA_TV/IPTV.m3u | FFmpeg decode OK | http://tvchannelstream1.tvzvezda.ru/cdn/tvzvezda/playlist_hdhigh.m3u8
+CANDIDATE | Пятый канал | HTTP_FAIL | boxer180/RUSSIA_TV/IPTV.m3u | <urlopen error [Errno -2] Name or service not known> | http://dmi3y-tv.ru/hls/T2/CH_5TV.m3u8
+CANDIDATE | ТНТ | HTTP_FAIL | boxer180/RUSSIA_TV/IPTV.m3u | <urlopen error [Errno -2] Name or service not known> | http://dmi3y-tv.ru/hls/T2/CH_TNT.m3u8
+CANDIDATE | ТНТ4 | HTTP_FAIL | boxer180/RUSSIA_TV/IPTV.m3u | HTTP Error 403: Forbidden | https://bl.uma.media/live/317849/HLS/4614144_3/2/1/playlist.m3u8
+CANDIDATE | Первый канал | HTTP_OK_NOT_DECODED | swoldier-rus/IP_TV/sw.m3u | HTTP manifest OK; FFmpeg cap reached for this channel | http://5.188.221.43:8080/play/ort
+CANDIDATE | Россия 1 HD (+4) | FFMPEG_OK | swoldier-rus/IP_TV/sw.m3u | FFmpeg decode OK | http://185.46.16.239:8000/Rossiya_1
+CANDIDATE | НТВ (+4) | HTTP_FAIL | swoldier-rus/IP_TV/sw.m3u | HTTP Error 403: Forbidden | http://cdn.ntv.ru/ntv0_hd/tracks-v3a1/mono.m3u8
+CANDIDATE | Пятый канал | HTTP_FAIL | swoldier-rus/IP_TV/sw.m3u | <urlopen error timed out> | http://178.134.1.158:8081/5channel/index.m3u8
+CANDIDATE | ТНТ | FFMPEG_OK | swoldier-rus/IP_TV/sw.m3u | FFmpeg decode OK | http://194.152.35.17/tnt/index.m3u8
+CANDIDATE | ТНТ4 | FFMPEG_OK | swoldier-rus/IP_TV/sw.m3u | FFmpeg decode OK | https://zabava-htlive.cdn.ngenix.net/hls/CH_TNT4/variant.m3u8
+CANDIDATE | Пятница! | FFMPEG_OK | swoldier-rus/IP_TV/sw.m3u | FFmpeg decode OK | http://zabava-htlive.cdn.ngenix.net/hls/CH_PYATNIZZA/variant.m3u8
+CANDIDATE | Рен ТВ | FFMPEG_OK | swoldier-rus/IP_TV/sw.m3u | FFmpeg decode OK | http://185.46.16.239:8000/REN_TV
+CANDIDATE | ТВЦ | HTTP_FAIL | swoldier-rus/IP_TV/sw.m3u | <urlopen error timed out> | http://185.71.81.6:8080/10/index.m3u8
+CANDIDATE | Домашний | FFMPEG_OK | swoldier-rus/IP_TV/sw.m3u | FFmpeg decode OK | http://185.46.16.239:8000/Domashniy
+CANDIDATE | ТВ3 | FFMPEG_OK | swoldier-rus/IP_TV/sw.m3u | FFmpeg decode OK | http://185.46.16.239:8000/TV3
+CANDIDATE | Смотрим 100% Любовь | FFMPEG_OK | swoldier-rus/IP_TV/sw.m3u | FFmpeg decode OK | http://31.131.141.195:8000/play/1090/index.m3u8
+CANDIDATE | МИР (+4) | FFMPEG_OK | swoldier-rus/IP_TV/sw.m3u | FFmpeg decode OK | http://hls.mirtv.cdnvideo.ru/mirtv-parampublish/mirtv_2500/playlist.m3u8
+CANDIDATE | Viasat History | FFMPEG_OK | swoldier-rus/IP_TV/sw.m3u | FFmpeg decode OK | http://radio.tvs.by:8088/HistoryHD/index.m3u8
+CANDIDATE | Че! | HTTP_FAIL | swoldier-rus/IP_TV/sw.m3u | HTTP Error 403: Forbidden | http://89.33.29.115:8080/Che/index.m3u8
+CANDIDATE | Россия 1 HD (+4) | HTTP_FAIL | swoldier-rus/IP_TV/sw2.m3u | <urlopen error [Errno -2] Name or service not known> | https://vgtrkregion-reg.cdnvideo.ru/vgtrk/krasnodar/russia1-sd/2081200_576p.m3u8
+CANDIDATE | ТНТ | FFMPEG_OK | swoldier-rus/IP_TV/sw2.m3u | FFmpeg decode OK | https://zabava-htlive.cdn.ngenix.net/hls/CH_TNT/variant.m3u8
+CANDIDATE | ТНТ4 | HTTP_FAIL | swoldier-rus/IP_TV/sw2.m3u | <urlopen error timed out> | http://178.212.71.253:8000/play/106/index.m3u8
+CANDIDATE | ТВЦ | FFMPEG_OK | swoldier-rus/IP_TV/sw2.m3u | FFmpeg decode OK | https://zabava-htlive.cdn.ngenix.net/hls/CH_TVC/variant.m3u8
+CANDIDATE | Домашний | FFMPEG_OK | swoldier-rus/IP_TV/sw2.m3u | FFmpeg decode OK | https://zabava-htlive.cdn.ngenix.net/hls/CH_DOMASHNIY/variant.m3u8
+CANDIDATE | ТВ3 | HTTP_FAIL | swoldier-rus/IP_TV/sw2.m3u | HTTP Error 400: Bad Request | http://93.170.254.17/TV3/index.m3u8
+CANDIDATE | Смотрим 100% Любовь | FFMPEG_OK | swoldier-rus/IP_TV/sw2.m3u | FFmpeg decode OK | https://zabava-htlive.cdn.ngenix.net/hls/CH_OTR/variant.m3u8
+CANDIDATE | Viasat History | HTTP_FAIL | swoldier-rus/IP_TV/sw2.m3u | <urlopen error timed out> | http://iptv46.mcx-ix.ru:8077/History-HD/index.m3u8
+CANDIDATE | Че! | FFMPEG_OK | swoldier-rus/IP_TV/sw2.m3u | FFmpeg decode OK | http://zabava-htlive.cdn.ngenix.net/hls/CH_PERETZ/variant.m3u8
+CANDIDATE | Мосфильм. Золотая коллекция | HTTP_FAIL | swoldier-rus/IP_TV/sw2.m3u | <urlopen error timed out> | http://178.134.1.158:8081/mosfilm/index.m3u8
+CANDIDATE | Русская комедия | HTTP_FAIL | swoldier-rus/IP_TV/sw2.m3u | <urlopen error timed out> | http://194.32.242.245/Komediya/index.m3u8
+CANDIDATE | Наш кинопоказ HD | HTTP_FAIL | swoldier-rus/IP_TV/sw2.m3u | <urlopen error timed out> | http://95.66.188.74/Kinopokaz/mono.m3u8
+CANDIDATE | Киносерия | HTTP_FAIL | swoldier-rus/IP_TV/sw2.m3u | <urlopen error timed out> | http://158.101.222.193:88/georgia_play.p
+CANDIDATE | Победа | USER_CONFIRMED | user-confirmed | confirmed by user | https://streaming.thestream.cyou/live/43.m3u8
+CANDIDATE | Viasat History | USER_CONFIRMED | user-confirmed | confirmed by user | http://178.124.179.122:8080/HistoryHD/index.m3u8
+CANDIDATE | Дом кино | USER_CONFIRMED | user-confirmed | confirmed by user | https://streaming.thestream.cyou/live/44.m3u8
+CANDIDATE | Viasat Nature | USER_CONFIRMED | user-confirmed | confirmed by user | https://stream8.cinerama.uz/1228/tracks-v1a1/mono.m3u8
+CANDIDATE | Viasat Nature | USER_CONFIRMED | user-confirmed | confirmed by user | http://46.53.200.153:7777/play/a01k/index.m3u8
+CANDIDATE | Наш кинопоказ HD | USER_CONFIRMED | user-confirmed | confirmed by user | http://46.53.200.153:7777/play/SRT_Nash_kinopokaz/index.m3u8
+CANDIDATE | Россия 24 | USER_CONFIRMED | user-confirmed | confirmed by user | http://176.118.197.101/Rossiya24/index.m3u8
+CANDIDATE | Родное кино | USER_CONFIRMED | user-confirmed | confirmed by user | https://stream8.cinerama.uz/1052/index.m3u8
+CANDIDATE | Наше новое кино | USER_CONFIRMED | user-confirmed | confirmed by user | https://stream8.cinerama.uz/1051/index.m3u8
+CANDIDATE | Русский бестселлер | USER_CONFIRMED | user-confirmed | confirmed by user | https://stream.mcquack.net/208/index.m3u8
+CANDIDATE | МУЗ ТВ | USER_CONFIRMED | user-confirmed | confirmed by user | https://stream8.cinerama.uz/1200/index.m3u8
+MAIN UPDATED: 33 entries
+HTTP CANDIDATES: 34
+FFMPEG DECODE TARGETS: 22 (max 3 per channel)
+FFMPEG DECODE OK: 22
+CHANNELS WITH CANDIDATES: 28/41
+NO CANDIDATE: Шансон ТВ, TV1000 Русское кино, Звезда Плюс, СТС, КиноСезон, Феникс+ Кино, Глазами туриста, Перец, Живая планета, Премиальное HD, Наше любимое HD, Русский иллюзион, Дом кино Премиум HD
+HTTP-ONLY / NOT DECODED (needs Televizo check): 

@@ -1,0 +1,69 @@
+#EXTM3U
+#EXTINF:-1 tvg-name="Победа" group-title="IPTV",Победа [USER_CONFIRMED]
+https://streaming.thestream.cyou/live/43.m3u8
+#EXTINF:-1 tvg-name="Viasat History" group-title="IPTV",Viasat History [FFMPEG_OK]
+http://radio.tvs.by:8088/HistoryHD/index.m3u8
+#EXTINF:-1 tvg-name="Viasat History" group-title="IPTV",Viasat History [USER_CONFIRMED]
+http://178.124.179.122:8080/HistoryHD/index.m3u8
+#EXTINF:-1 tvg-name="Viasat Nature" group-title="IPTV",Viasat Nature [USER_CONFIRMED]
+http://46.53.200.153:7777/play/a01k/index.m3u8
+#EXTINF:-1 tvg-name="Viasat Nature" group-title="IPTV",Viasat Nature [USER_CONFIRMED]
+https://stream8.cinerama.uz/1228/tracks-v1a1/mono.m3u8
+#EXTINF:-1 tvg-name="Родное кино" group-title="IPTV",Родное кино [USER_CONFIRMED]
+https://stream8.cinerama.uz/1052/index.m3u8
+#EXTINF:-1 tvg-name="Наше новое кино" group-title="IPTV",Наше новое кино [USER_CONFIRMED]
+https://stream8.cinerama.uz/1051/index.m3u8
+#EXTINF:-1 tvg-name="ТНТ4" group-title="IPTV",ТНТ4 [FFMPEG_OK]
+https://zabava-htlive.cdn.ngenix.net/hls/CH_TNT4/variant.m3u8
+#EXTINF:-1 tvg-name="Дом кино" group-title="IPTV",Дом кино [USER_CONFIRMED]
+https://streaming.thestream.cyou/live/44.m3u8
+#EXTINF:-1 tvg-name="Смотрим 100% Любовь" group-title="IPTV",Смотрим 100% Любовь [FFMPEG_OK]
+http://31.131.141.195:8000/play/1090/index.m3u8
+#EXTINF:-1 tvg-name="Смотрим 100% Любовь" group-title="IPTV",Смотрим 100% Любовь [FFMPEG_OK]
+https://zabava-htlive.cdn.ngenix.net/hls/CH_OTR/variant.m3u8
+#EXTINF:-1 tvg-name="НТВ (+4)" group-title="IPTV",НТВ (+4) [FFMPEG_OK]
+https://zabava-htlive.cdn.ngenix.net/hls/CH_NTV/variant.m3u8
+#EXTINF:-1 tvg-name="ТНТ" group-title="IPTV",ТНТ [FFMPEG_OK]
+http://194.152.35.17/tnt/index.m3u8
+#EXTINF:-1 tvg-name="ТНТ" group-title="IPTV",ТНТ [FFMPEG_OK]
+https://zabava-htlive.cdn.ngenix.net/hls/CH_TNT/variant.m3u8
+#EXTINF:-1 tvg-name="Пятница!" group-title="IPTV",Пятница! [FFMPEG_OK]
+http://zabava-htlive.cdn.ngenix.net/hls/CH_PYATNIZZA/variant.m3u8
+#EXTINF:-1 tvg-name="ТВ3" group-title="IPTV",ТВ3 [FFMPEG_OK]
+http://185.46.16.239:8000/TV3
+#EXTINF:-1 tvg-name="Че!" group-title="IPTV",Че! [FFMPEG_OK]
+http://zabava-htlive.cdn.ngenix.net/hls/CH_PERETZ/variant.m3u8
+#EXTINF:-1 tvg-name="Домашний" group-title="IPTV",Домашний [FFMPEG_OK]
+http://185.46.16.239:8000/Domashniy
+#EXTINF:-1 tvg-name="Домашний" group-title="IPTV",Домашний [FFMPEG_OK]
+https://zabava-htlive.cdn.ngenix.net/hls/CH_DOMASHNIY/variant.m3u8
+#EXTINF:-1 tvg-name="Русский бестселлер" group-title="IPTV",Русский бестселлер [USER_CONFIRMED]
+https://stream.mcquack.net/208/index.m3u8
+#EXTINF:-1 tvg-name="Наш кинопоказ HD" group-title="IPTV",Наш кинопоказ HD [USER_CONFIRMED]
+http://46.53.200.153:7777/play/SRT_Nash_kinopokaz/index.m3u8
+#EXTINF:-1 tvg-name="Россия 1 HD (+4)" group-title="IPTV",Россия 1 HD (+4) [FFMPEG_OK]
+https://zabava-htlive.cdn.ngenix.net/hls/CH_RUSSIA1/variant.m3u8
+#EXTINF:-1 tvg-name="Россия 1 HD (+4)" group-title="IPTV",Россия 1 HD (+4) [FFMPEG_OK]
+http://185.46.16.239:8000/Rossiya_1
+#EXTINF:-1 tvg-name="Россия 24" group-title="IPTV",Россия 24 [USER_CONFIRMED]
+http://176.118.197.101/Rossiya24/index.m3u8
+#EXTINF:-1 tvg-name="Первый канал" group-title="IPTV",Первый канал [FFMPEG_OK]
+https://s14131.cdn.ngenix.net/hls/CH_R41_OTT_DV_KAM_1TV/variant.m3u8
+#EXTINF:-1 tvg-name="Первый канал" group-title="IPTV",Первый канал [FFMPEG_OK]
+https://streaming.thestream.cyou/live/210.m3u8
+#EXTINF:-1 tvg-name="Первый канал" group-title="IPTV",Первый канал [FFMPEG_OK]
+https://zabava-htlive.cdn.ngenix.net/hls/CH_1TVSD/variant.m3u8
+#EXTINF:-1 tvg-name="Первый канал" group-title="IPTV",Первый канал [HTTP_OK_NOT_DECODED]
+http://5.188.221.43:8080/play/ort
+#EXTINF:-1 tvg-name="Рен ТВ" group-title="IPTV",Рен ТВ [FFMPEG_OK]
+http://185.46.16.239:8000/REN_TV
+#EXTINF:-1 tvg-name="ТВЦ" group-title="IPTV",ТВЦ [FFMPEG_OK]
+http://tvc-hls.cdnvideo.ru/tvc-res/smil:vd9221_2.smil/playlist.m3u8
+#EXTINF:-1 tvg-name="ТВЦ" group-title="IPTV",ТВЦ [FFMPEG_OK]
+https://zabava-htlive.cdn.ngenix.net/hls/CH_TVC/variant.m3u8
+#EXTINF:-1 tvg-name="МИР (+4)" group-title="IPTV",МИР (+4) [FFMPEG_OK]
+http://hls.mirtv.cdnvideo.ru/mirtv-parampublish/mirtv_2500/playlist.m3u8
+#EXTINF:-1 tvg-name="Звезда" group-title="IPTV",Звезда [FFMPEG_OK]
+http://tvchannelstream1.tvzvezda.ru/cdn/tvzvezda/playlist_hdhigh.m3u8
+#EXTINF:-1 tvg-name="МУЗ ТВ" group-title="IPTV",МУЗ ТВ [USER_CONFIRMED]
+https://stream8.cinerama.uz/1200/index.m3u8
