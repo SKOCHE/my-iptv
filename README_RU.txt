@@ -1,54 +1,36 @@
-# SKOCHE / my-iptv — сборка проверенного плейлиста
+IPTV v5 — Android TV / Televizo
 
-## Что было не так в предыдущих версиях
+INSTALL
+Replace these files in the repository root:
+- update_playlist.py
+- channels.json
+- .github/workflows/auto_update.yml
 
-1. В `favorites.m3u` попадали резервные адреса, которые не были проверены по содержимому.
-2. Один URL использовался сразу для нескольких названий.
-3. Проверка `HEAD`/HTTP 200 не доказывала, что это видеопоток нужного канала.
-4. Отсутствие FFmpeg могло ошибочно трактоваться как «канал не работает», а процесс всё равно завершался успешно.
-5. Часовой пояс задавался одной общей константой, хотя региональные фиды могут иметь разные зоны.
+Do NOT upload an empty favorites.m3u from this package. The existing playlist is preserved unless at least one stream passes the checks.
 
-## Что делает эта версия
+WHAT IS CHECKED
+- Exact channel ID match from iptv-org channels.json.
+- A Russian-language feed and Russian broadcast area (or RU channel record).
+- HTTPS only.
+- Excludes labels Geo-blocked and Not 24/7.
+- Excludes domains the user reported as bad: cinerama.uz, mcquack.net, linkintel.ru, thestream.cyou.
+- FFmpeg decodes up to 12 seconds and samples frames; obvious flat/black/green frames are rejected.
+- No duplicate stream URL.
+- Generates update_report.txt for all requested channels and epg_mapping.txt with available guide source references.
+- On missing ffmpeg, bad manifest, API failure, or too few valid streams, workflow fails and old favorites.m3u is not overwritten.
 
-- Использует структурированные данные iptv-org: `channels.json`, `feeds.json`, `streams.json`.
-- Сопоставляет канал только по точному имени/явному alias и каноническому ID.
-- Ищет русскоязычный фид с зоной вещания RU (либо российским channel record).
-- Отбрасывает записи с метками `Geo-blocked` и `Not 24/7`.
-- Проверяет реальное декодирование видеосэмпла через FFmpeg.
-- Не допускает один и тот же URL для нескольких каналов.
-- Не подставляет старые сомнительные ссылки и не переименовывает чужой канал.
-- Если проверенных ссылок меньше минимума, не перезаписывает существующий `favorites.m3u` и завершает workflow ошибкой.
-- Загружает `update_report.txt` как GitHub Actions artifact даже при ошибке.
+IMPORTANT LIMITS
+Video decoding and frame statistics cannot identify channel branding. A moving paywall slate or a different channel may pass. No automatic script can truthfully certify all channels by only probing HLS. Final channel identity requires comparing logo/programme/EPG or human visual inspection. Paid channels remain paid; this does not bypass subscriptions or geo restrictions.
+The package deliberately does not restore old fallback URLs because the user reported them as wrong, paywalled, or broken.
 
-## Важное ограничение
+TIMEZONE / EPG
+Each selected feed's timezone is written to update_report.txt. Guide IDs and guide-source URLs (where listed by iptv-org) are written to epg_mapping.txt. This file is a mapping/report, not a guaranteed ready XMLTV feed. Televizo should use Android TV automatic date/time/timezone. Do not force a global EPG shift until the actual guide offset has been checked.
 
-Даже успешное декодирование нескольких секунд видео не гарантирует, что на экране именно заявленный телеканал: это может быть заставка оператора, paywall или чужой контент. Полная проверка «канал к каналу» требует визуальной идентификации/сверки EPG и длительного теста. Эта сборка не выдаёт FFmpeg-проверку за доказательство содержимого.
+RUN
+GitHub -> Actions -> IPTV Android TV - strict build -> Run workflow.
+Download artifact iptv-v5-diagnostics even if the job fails.
+Raw playlist URL remains:
+https://raw.githubusercontent.com/SKOCHE/my-iptv/main/favorites.m3u
 
-Платные каналы (например, Viasat/TV1000, если источник требует подписку) не становятся бесплатными от смены URL. Скрипт не обходит авторизацию и геоблокировки. Если в открытых каталогах нет подходящего свободного потока, канал будет отмечен как `NO VERIFIED VIDEO`, а не заменён детским каналом.
-
-## Часовой пояс и программа передач
-
-В `feeds.json` зона вещания указана для каждого feed. Скрипт выводит её в `update_report.txt`. В сам M3U нельзя корректно записать одну общую зону для всех каналов. EPG/XMLTV должен конвертироваться Televizo в часовой пояс устройства. Включите на устройстве автоматические дату, время и часовой пояс. Не задавайте вручную `tvg-shift`, если EPG уже содержит корректные временные отметки.
-
-## Установка в SKOCHE/my-iptv
-
-Замените/добавьте в корне репозитория:
-- `update_playlist.py`
-- `channels.json`
-- `.github/workflows/auto_update.yml`
-
-Не загружайте пустой `favorites.m3u` из архива поверх текущего. Workflow обновит существующий файл только после проверки хотя бы одного потока.
-
-После commit:
-1. Откройте **Actions**.
-2. Выберите **Build verified IPTV playlist**.
-3. Нажмите **Run workflow**.
-4. Если запуск упал, откройте artifact `iptv-update-report` или файл `update_report.txt`.
-5. Смотрите строки `VIDEO DECODE OK`, `NOT MAPPED/AMBIGUOUS`, `NO VERIFIED VIDEO`.
-
-Raw-ссылка для Televizo остаётся прежней:
-`https://raw.githubusercontent.com/SKOCHE/my-iptv/main/favorites.m3u`
-
-## Источники схемы данных
-- https://github.com/iptv-org/api
-- https://github.com/iptv-org/iptv
+Data model documentation:
+https://github.com/iptv-org/api

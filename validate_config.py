@@ -1,9 +1,6 @@
-import json, pathlib, shutil
+import json,pathlib
 p=pathlib.Path(__file__).parent
-channels=json.loads((p/"channels.json").read_text(encoding="utf-8"))
-assert len(channels)==41, f"Expected 41 channels, got {len(channels)}"
-names=[x["name"] for x in channels]
-assert len(set(names))==41, "Duplicate channel names"
-assert all(x.get("aliases") for x in channels), "Missing aliases"
-print(f"Manifest OK: {len(names)} unique channel names")
-print("FFmpeg installed:", bool(shutil.which("ffmpeg")))
+x=json.loads((p/"channels.json").read_text(encoding="utf-8"))
+assert len(x)==41
+assert len({c["name"] for c in x})==41
+print("OK: 41 unique channel entries")
