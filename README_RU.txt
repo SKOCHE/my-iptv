@@ -1,36 +1,26 @@
-IPTV v5 — Android TV / Televizo
+IPTV v6 — комплект замены для SKOCHE/my-iptv
 
-INSTALL
-Replace these files in the repository root:
-- update_playlist.py
-- channels.json
-- .github/workflows/auto_update.yml
+ЧТО ВНУТРИ
+- channels.json — список всех 41 каналов и псевдонимов.
+- update_playlist.py — подбор потоков из iptv-org, проверка декодирования FFmpeg, отчёт.
+- validate_config.py — проверка манифеста (ровно 41 канал).
+- .github/workflows/auto_update.yml — установка FFmpeg/Pillow, запуск, публикация отчётов и коммит.
 
-Do NOT upload an empty favorites.m3u from this package. The existing playlist is preserved unless at least one stream passes the checks.
+КАК УСТАНОВИТЬ
+1. Распакуй архив на компьютере.
+2. Открой репозиторий https://github.com/SKOCHE/my-iptv.
+3. В корне замени channels.json, update_playlist.py, validate_config.py и README_RU.txt.
+4. В папке .github/workflows замени auto_update.yml.
+5. Не удаляй вручную favorites.m3u. Скрипт обновит его только если пройдут минимум 5 потоков; при неудаче старый файл сохранится.
+6. Открой Actions → Build strict Android TV IPTV playlist → Run workflow.
+7. После запуска проверь update_report.txt и скачай artifact iptv-diagnostics, если запуск завершился ошибкой.
 
-WHAT IS CHECKED
-- Exact channel ID match from iptv-org channels.json.
-- A Russian-language feed and Russian broadcast area (or RU channel record).
-- HTTPS only.
-- Excludes labels Geo-blocked and Not 24/7.
-- Excludes domains the user reported as bad: cinerama.uz, mcquack.net, linkintel.ru, thestream.cyou.
-- FFmpeg decodes up to 12 seconds and samples frames; obvious flat/black/green frames are rejected.
-- No duplicate stream URL.
-- Generates update_report.txt for all requested channels and epg_mapping.txt with available guide source references.
-- On missing ffmpeg, bad manifest, API failure, or too few valid streams, workflow fails and old favorites.m3u is not overwritten.
+ВАЖНЫЕ ОГРАНИЧЕНИЯ
+- Источники берутся из каталога iptv-org. Это не полный интернет-каталог и он не гарантирует наличие всех 41 каналов.
+- FFmpeg подтверждает, что видео декодируется, но НЕ определяет название канала по картинке. Поэтому статус DECODE OK не равен подтверждению, что это нужный канал.
+- Исключены домены cinerama.uz, mcquack.net, linkintel.ru и thestream.cyou, на которые ранее поступали жалобы.
+- Нельзя обещать 41 рабочий канал без отдельной проверки каждого потока в Televizo.
+- Если найдено меньше 5 потоков, favorites.m3u не перезаписывается.
 
-IMPORTANT LIMITS
-Video decoding and frame statistics cannot identify channel branding. A moving paywall slate or a different channel may pass. No automatic script can truthfully certify all channels by only probing HLS. Final channel identity requires comparing logo/programme/EPG or human visual inspection. Paid channels remain paid; this does not bypass subscriptions or geo restrictions.
-The package deliberately does not restore old fallback URLs because the user reported them as wrong, paywalled, or broken.
-
-TIMEZONE / EPG
-Each selected feed's timezone is written to update_report.txt. Guide IDs and guide-source URLs (where listed by iptv-org) are written to epg_mapping.txt. This file is a mapping/report, not a guaranteed ready XMLTV feed. Televizo should use Android TV automatic date/time/timezone. Do not force a global EPG shift until the actual guide offset has been checked.
-
-RUN
-GitHub -> Actions -> IPTV Android TV - strict build -> Run workflow.
-Download artifact iptv-v5-diagnostics even if the job fails.
-Raw playlist URL remains:
+ССЫЛКА ДЛЯ TELEVIZO ОСТАЁТСЯ ПРЕЖНЕЙ:
 https://raw.githubusercontent.com/SKOCHE/my-iptv/main/favorites.m3u
-
-Data model documentation:
-https://github.com/iptv-org/api
