@@ -1,166 +1,278 @@
 [
   {
     "name": "Шансон ТВ",
-    "fallback_url": "http://catchup.videoline.ru/shanson/index.m3u8"
+    "aliases": [
+      "Shanson TV",
+      "Chanson TV"
+    ]
   },
   {
     "name": "Победа",
-    "fallback_url": "https://cdn4.skygo.mn/live/disk1/Pobeda/HLSv3-FTA/Pobeda.m3u8"
+    "aliases": [
+      "Pobeda",
+      "Победа ТВ"
+    ]
   },
   {
     "name": "Viasat History",
-    "fallback_url": "http://stream.mcquack.net/60/index.m3u8"
+    "aliases": [
+      "Viasat History HD"
+    ]
   },
   {
     "name": "Viasat Nature",
-    "fallback_url": "https://bl.rutube.ru/livestream/5c9327074e25ca86f3111d4085cbbb65/index.m3u8?e=2066519758&s=9cPc1rCGu6M932eqrifRhQ&scheme=https"
+    "aliases": [
+      "Viasat Nature HD"
+    ]
   },
   {
     "name": "TV1000 Русское кино",
-    "fallback_url": "http://stream.mcquack.net/60/index.m3u8"
+    "aliases": [
+      "TV1000 Russian Kino",
+      "TV1000 Russkoe Kino"
+    ]
   },
   {
     "name": "Родное кино",
-    "fallback_url": "http://stream.mcquack.net/242/index.m3u8"
+    "aliases": [
+      "Rodnoe Kino"
+    ]
   },
   {
     "name": "Киносерия",
-    "fallback_url": "https://fs.uplink.kz/kinoseria/mono.m3u8?token=onlinetv"
+    "aliases": [
+      "Kinoseriya",
+      "Kino Seriya"
+    ]
   },
   {
     "name": "Наше новое кино",
-    "fallback_url": "https://stream8.cinerama.uz/1051/tracks-v1a1/mono.m3u8"
+    "aliases": [
+      "Nashe Novoe Kino"
+    ]
   },
   {
     "name": "ТНТ4",
-    "fallback_url": "http://flussonic.linkintel.ru/tnt4/index.m3u8"
+    "aliases": [
+      "TNT4",
+      "TNT 4"
+    ]
   },
   {
     "name": "Дом кино",
-    "fallback_url": "http://stream.mcquack.net/236/index.m3u8"
+    "aliases": [
+      "Dom Kino"
+    ]
   },
   {
     "name": "Смотрим 100% Любовь",
-    "fallback_url": "https://stream.smotrim.ru/hls/fasttv01/playlist_2.m3u8"
+    "aliases": [
+      "100% Love",
+      "Smotrim 100% Lyubov"
+    ]
   },
   {
     "name": "Звезда Плюс",
-    "fallback_url": "http://tvzvezda.bonus-tv.ru/cdn/zvezdaplus/playlist.m3u8"
+    "aliases": [
+      "Zvezda Plus"
+    ]
   },
   {
     "name": "НТВ (+4)",
-    "fallback_url": "https://cdn.ntv.ru/ntv4/playlist.m3u8"
+    "aliases": [
+      "NTV +4",
+      "NTV4"
+    ]
   },
   {
     "name": "ТНТ",
-    "fallback_url": "http://stream.mcquack.net/135/index.m3u8"
+    "aliases": [
+      "TNT"
+    ]
   },
   {
     "name": "Пятница!",
-    "fallback_url": "http://stream.mcquack.net/181/index.m3u8"
+    "aliases": [
+      "Pyatnitsa",
+      "Friday!"
+    ]
   },
   {
     "name": "Пятый канал",
-    "fallback_url": "http://31.148.5.241/kanal_5/index.m3u8"
+    "aliases": [
+      "Channel 5",
+      "Pyaty Kanal"
+    ]
   },
   {
     "name": "СТС",
-    "fallback_url": "http://tshift-1.telecoma.tv/sts/index.m3u8"
+    "aliases": [
+      "STS",
+      "CTC"
+    ]
   },
   {
     "name": "ТВ3",
-    "fallback_url": "http://flussonic.linkintel.ru/tv-3/index.m3u8"
+    "aliases": [
+      "TV3",
+      "TV-3"
+    ]
   },
   {
     "name": "Че!",
-    "fallback_url": "http://flussonic.linkintel.ru/che/index.m3u8"
+    "aliases": [
+      "Che TV"
+    ]
   },
   {
     "name": "Домашний",
-    "fallback_url": "http://stream.mcquack.net/227/index.m3u8"
+    "aliases": [
+      "Domashniy",
+      "Domashny"
+    ]
   },
   {
     "name": "КиноСезон",
-    "fallback_url": "http://stream.mcquack.net/60/index.m3u8"
+    "aliases": [
+      "KinoSezon",
+      "Kino Sezon"
+    ]
   },
   {
     "name": "Феникс+ Кино",
-    "fallback_url": "http://stream.mcquack.net/60/index.m3u8"
+    "aliases": [
+      "Feniks Kino",
+      "Phoenix Kino"
+    ]
   },
   {
     "name": "Глазами туриста",
-    "fallback_url": "https://stream8.cinerama.uz/1423/tracks-v1a1/mono.m3u8"
+    "aliases": [
+      "Glazami Turista"
+    ]
   },
   {
     "name": "Перец",
-    "fallback_url": "http://stream.mcquack.net/121/index.m3u8"
+    "aliases": [
+      "Perets",
+      "Peretz"
+    ]
   },
   {
     "name": "Живая планета",
-    "fallback_url": "https://stream8.cinerama.uz/1250/tracks-v1a1/mono.m3u8"
+    "aliases": [
+      "Zhivaya Planeta",
+      "Living Planet"
+    ]
   },
   {
     "name": "Русский бестселлер",
-    "fallback_url": "http://stream.mcquack.net/208/index.m3u8"
+    "aliases": [
+      "Russkiy Bestseller",
+      "Russian Bestseller"
+    ]
   },
   {
     "name": "Русская комедия",
-    "fallback_url": "http://stream.mcquack.net/60/index.m3u8"
+    "aliases": [
+      "Russkaya Komediya",
+      "Russian Comedy"
+    ]
   },
   {
     "name": "Премиальное HD",
-    "fallback_url": "http://stream.mcquack.net/421/index.m3u8"
+    "aliases": [
+      "Premialnoe HD"
+    ]
   },
   {
     "name": "Наше любимое HD",
-    "fallback_url": "http://stream.mcquack.net/217/index.m3u8"
+    "aliases": [
+      "Nashe Lyubimoe HD"
+    ]
   },
   {
     "name": "Наш кинопоказ HD",
-    "fallback_url": "http://stream.mcquack.net/64/index.m3u8"
+    "aliases": [
+      "Nash Kinopokaz HD"
+    ]
   },
   {
     "name": "Русский иллюзион",
-    "fallback_url": "http://176.118.197.101/Illuzion+/index.m3u8"
+    "aliases": [
+      "Russkiy Illuzion",
+      "Russian Illusion"
+    ]
   },
   {
     "name": "Мосфильм. Золотая коллекция",
-    "fallback_url": "http://31.222.235.15/mosfilm/index.m3u8"
+    "aliases": [
+      "Mosfilm Gold Collection",
+      "Mosfilm Zolotaya Kollektsiya"
+    ]
   },
   {
     "name": "Россия 1 HD (+4)",
-    "fallback_url": "https://vgtrkregion-reg.cdnvideo.ru/vgtrk/4/russia1-hd/index.m3u8"
+    "aliases": [
+      "Russia 1 HD",
+      "Rossiya 1 HD"
+    ]
   },
   {
     "name": "Россия 24",
-    "fallback_url": "https://vgtrkregion-reg.cdnvideo.ru/vgtrk/habarovsk/russia24-sd/index.m3u8"
+    "aliases": [
+      "Russia 24",
+      "Rossiya 24"
+    ]
   },
   {
     "name": "Дом кино Премиум HD",
-    "fallback_url": "http://31.148.48.15/Dom_Kino_Premium_HD/index.m3u8"
+    "aliases": [
+      "Dom Kino Premium HD"
+    ]
   },
   {
     "name": "Первый канал",
-    "fallback_url": "http://31.148.48.15/Pervii_kanal_HD/index.m3u8"
+    "aliases": [
+      "Channel One",
+      "1TV",
+      "Perviy Kanal"
+    ]
   },
   {
     "name": "Рен ТВ",
-    "fallback_url": "http://31.148.48.15/REN-TV/index.m3u8"
+    "aliases": [
+      "REN TV",
+      "Ren TV"
+    ]
   },
   {
     "name": "ТВЦ",
-    "fallback_url": "http://185.71.81.6:8080/10/index.m3u8"
+    "aliases": [
+      "TV Center",
+      "TV Centre",
+      "TVC"
+    ]
   },
   {
     "name": "МИР (+4)",
-    "fallback_url": "http://31.148.48.15/Mir/index.m3u8"
+    "aliases": [
+      "Mir +4",
+      "Mir TV +4"
+    ]
   },
   {
     "name": "Звезда",
-    "fallback_url": "http://51.158.144.33:2021/zvezda/index.m3u8"
+    "aliases": [
+      "Zvezda TV"
+    ]
   },
   {
     "name": "МУЗ ТВ",
-    "fallback_url": "http://46.32.176.50/muztv/index.m3u8"
+    "aliases": [
+      "Muz TV",
+      "MUZ-TV",
+      "MuzTV"
+    ]
   }
 ]
