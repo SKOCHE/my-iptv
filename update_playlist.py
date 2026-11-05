@@ -4,11 +4,11 @@ import socket
 
 # 1. Расширенный список проверенных источников (включая базы СНГ и региональные каналы)
 SOURCES = [
-    "https://githubusercontent.com",       # Основная база каналов РФ
+    "https://github.io",       # Основная база каналов РФ
     "https://githubusercontent.com"  # СНГ-база данных
 ]
 
-# 2. Ровно 33 уникальных канала с ваших скриншотов + новые добавленные
+# 2. Ровно 42 уникальных канала с ваших скриншотов + новые добавленные
 MY_FAVORITE_CHANNELS = [
     "Шансон ТВ", "Мосфильм. Золотая коллекция", "Победа", "Viasat History",
     "Viasat Nature", "TV1000 Русское кино", "Родное кино", "Киносерия",
@@ -62,8 +62,8 @@ def main():
                         # Проверяем, является ли канал версией +4
                         is_plus_four = any(marker in channel_name for marker in ["+4", "(+4)", "+4h", "Красноярск"])
                         
-                        # Если канал еще не добавлен ИЛИ если старый variant был без +4, а новый нашелся с "+4"
-                        if cleaned_src_name not in collected_channels or (is_plus_four and not collected_channels[cleaned_src_name][3]):
+                        # Если канал еще не добавлен ИЛИ если старый вариант был без +4, а новый нашелся с "+4"
+                        if cleaned_src_name not in collected_channels or (is_plus_four and not collected_channels[cleaned_src_name]):
                             beautiful_name = favorites_map[cleaned_src_name]
                             if is_plus_four:
                                 beautiful_name += " (+4)"
@@ -96,4 +96,5 @@ def main():
 if __name__ == "__main__":
     socket.setdefaulttimeout(4)
     main()
+
 
