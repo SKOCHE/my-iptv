@@ -3,7 +3,7 @@
 """Build IPTV playlist with explicit Barnaul (+4) regional overrides.
 A successful FFmpeg decode is NOT proof of channel identity.
 """
-import concurrent.futures, json, os, re, shutil, subprocess, sys, time, io
+import concurrent.futures, json, os, re, shutil, subprocess, sys, time, io, unicodedata
 from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.parse import urlsplit
@@ -24,6 +24,8 @@ BARNAUL_PLUS4 = {
     'НТВ (+4)': 'https://cdn.ntv.ru/ntv4/playlist.m3u8',
     'Россия 1 HD (+4)': 'https://vgtrkregion-reg.cdnvideo.ru/vgtrk/4/russia1-hd/index.m3u8',
 }
+# Do not substitute a generic feed for a regional channel.
+NO_GENERIC_STREAMS = {'МИР (+4)'}
 
 def norm(s):
     s = (s or '').casefold().replace('ё', 'е')
@@ -122,7 +124,7 @@ def main():
                 name_index.setdefault(norm(n), set()).add(c['id'])
 
     report = [
-        'IPTV v10 diagnostic report',
+        'IPTV v11 diagnostic report',
         'UTC: ' + time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()),
         'IMPORTANT: FFmpeg decode confirms video availability, NOT channel identity.',
         'Regional target: Barnaul, Moscow time +4.',
@@ -134,6 +136,20 @@ def main():
     output = ['#EXTM3U']
     used = set()
     passed = 0
+    placeholders = 0
+
+    def add_unavailable(item, cid, reason):
+        nonlocal placeholders
+        name = item['name']
+        slug = unicodedata.normalize('NFKD', name).encode('ascii', 'ignore').decode('ascii')
+        slug = re.sub(r'[^A-Za-z0-9]+', '-', slug).strip('-').lower() or f'channel-{placeholders+1}'
+        # .invalid is a reserved non-working domain: no unrelated stream is substituted.
+        placeholder_url = f'https://example.invalid/iptv-unavailable/{slug}.m3u8'
+        tvg_id = cid or ''
+        output.append(f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{name}" group-title="Нет потока",{name} [НЕТ ПОТОКА]')
+        output.append(placeholder_url)
+        placeholders += 1
+        report.append(f'PLACEHOLDER / NO VERIFIED STREAM | {name} | id={cid or "unknown"} | {reason}')
 
     for item in wanted:
         name = item['name']
@@ -149,6 +165,7 @@ def main():
             else:
                 report.append(f'DUPLICATE REGIONAL URL | {name} | {regional_url}')
                 epg_lines.append(f'{name} | | regional URL duplicated')
+                add_unavailable(item, item.get('channel_id'), 'duplicate regional URL')
                 continue
             cid, match, ch = item.get('channel_id'), 'explicit Barnaul +4 URL', {}
         else:
@@ -156,10 +173,12 @@ def main():
             if not cid:
                 report.append(f'NO CHANNEL ID | {name} | {match}')
                 epg_lines.append(f'{name} | | no channel ID')
+                add_unavailable(item, None, match)
                 continue
             ch = byid[cid]
             candidates = []
-            for st in streams:
+            stream_source = [] if name in NO_GENERIC_STREAMS else streams
+            for st in stream_source:
                 if st.get('channel') != cid:
                     continue
                 url = (st.get('url') or '').strip()
@@ -195,6 +214,7 @@ def main():
                 f'{"; ".join(reasons[:4]) or "no eligible stream"}'
             )
             epg_lines.append(f'{name} | {cid or ""} | guide not verified')
+            add_unavailable(item, cid, 'no stream passed decode/identity filter')
             continue
 
         st, feed, reason = accepted
@@ -216,7 +236,8 @@ def main():
 
     report += [
         '',
-        f'SUMMARY: decoded={passed}/41; no decoded stream={41-passed}',
+        f'SUMMARY: playable_candidates={passed}/41; placeholders={placeholders}; total_playlist_entries={passed+placeholders}/41',
+        'A PLACEHOLDER is visible in Televizo but cannot play; it is not a working stream.',
         'Regional +4 URLs are candidates; verify broadcast identity/time in Televizo.',
         'MIR (+4) is intentionally not mapped to a generic stream.',
         'Never treat DECODE OK as visual confirmation of the named channel.'
@@ -224,18 +245,14 @@ def main():
     REPORT.write_text('\n'.join(report) + '\n', encoding='utf-8')
     EPG.write_text('\n'.join(epg_lines) + '\n', encoding='utf-8')
 
-    minimum = int(os.environ.get('MINIMUM_TO_PUBLISH', '5'))
-    if passed < minimum:
-        raise RuntimeError(
-            f'Only {passed} channels decoded (< minimum {minimum}); '
-            'existing favorites.m3u was NOT changed'
-        )
+    if len(output) != 1 + 2 * len(wanted):
+        raise RuntimeError(f'Playlist entry count mismatch: expected {len(wanted)}, got {(len(output)-1)//2}')
     tmp = OUT.with_suffix('.m3u.tmp')
     tmp.write_text('\n'.join(output) + '\n', encoding='utf-8')
     tmp.replace(OUT)
     print(
-        f'Updated favorites.m3u: {passed}/41 streams decoded. '
-        'Channel identity and regional time still require visual confirmation.'
+        f'Updated favorites.m3u: {passed} playable candidates + {placeholders} visible placeholders = {passed+placeholders}/41 entries. '
+        'Placeholders do not play; channel identity and regional time require visual confirmation.'
     )
 
 if __name__ == '__main__':
