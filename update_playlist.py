@@ -2,13 +2,13 @@ import urllib.request
 import re
 import socket
 
-# 1. Расширенный список проверенных источников (включая базы СНГ и региональные каналы)
+# 1. Точные ссылки на рабочие базы (РФ каналы и общая СНГ база)
 SOURCES = [
-    "https://github.io",       # Основная база каналов РФ
-    "https://githubusercontent.com"  # СНГ-база данных
+    "https://githubusercontent.com",
+    "https://githubusercontent.com"
 ]
 
-# 2. Ровно 42 уникальных канала с ваших скриншотов + новые добавленные
+# 2. Список ваших любимых каналов (42 уникальных канала)
 MY_FAVORITE_CHANNELS = [
     "Шансон ТВ", "Мосфильм. Золотая коллекция", "Победа", "Viasat History",
     "Viasat Nature", "TV1000 Русское кино", "Родное кино", "Киносерия",
@@ -63,12 +63,13 @@ def main():
                         is_plus_four = any(marker in channel_name for marker in ["+4", "(+4)", "+4h", "Красноярск"])
                         
                         # Если канал еще не добавлен ИЛИ если старый вариант был без +4, а новый нашелся с "+4"
-                        if cleaned_src_name not in collected_channels or (is_plus_four and not collected_channels[cleaned_src_name]):
+                        if cleaned_src_name not in collected_channels or (is_plus_four and not collected_channels[cleaned_src_name][3]):
                             beautiful_name = favorites_map[cleaned_src_name]
                             if is_plus_four:
                                 beautiful_name += " (+4)"
                                 
                             clean_extinf = f'#EXTINF:-1,{beautiful_name}'
+                            # Сохраняем: (extinf, url, имя, флаг_что_это_плюс_четыре)
                             collected_channels[cleaned_src_name] = (clean_extinf, stream_url.strip(), beautiful_name, is_plus_four)
         except Exception as e:
             print(f"Ошибка при чтении источника {url}: {e}")
@@ -96,5 +97,6 @@ def main():
 if __name__ == "__main__":
     socket.setdefaulttimeout(4)
     main()
+
 
 
