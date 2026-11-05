@@ -11,7 +11,7 @@ TV1000 Русское кино | vijuTV1000russkoe.ru | EPG source not listed
 Дом кино | Domkino.ru | EPG source not listed
 Смотрим 100% Любовь | Smotrim100Lyubov.ru | EPG source not listed
 Звезда Плюс | ZvezdaPlus.ru | EPG source not listed
-НТВ (+4) | NTV.ru | EPG source not listed
+НТВ (+4) | NTV.ru | guide not found
 ТНТ | TNT.ru | EPG source not listed
 Пятница! | Friday.ru | EPG source not listed
 Пятый канал | Channel5.ru | EPG source not listed

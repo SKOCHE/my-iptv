@@ -1,6 +1,7 @@
-IPTV v7 diagnostic report
-UTC: 2026-11-05 08:49:55
+IPTV v9 diagnostic report
+UTC: 2026-11-05 08:54:57
 IMPORTANT: decoding confirms only that video can be decoded; it does not verify channel identity.
+Barnaul target: Moscow time +4. NTV +4 and Russia 1 +4 use explicit regional URLs.
 Previously reported bad domains excluded: cinerama.uz, linkintel.ru, mcquack.net, thestream.cyou
 
 DECODE OK / IDENTITY UNCONFIRMED | Шансон ТВ | id=ShansonTV.ru | match=canonical exact | 6 frames decoded; 6 non-flat | http://catchup.videoline.ru/shanson/index.m3u8
@@ -15,7 +16,7 @@ NO DECODED STREAM | ТНТ4 | id=TNT4.ru | match=canonical exact | candidates=2 
 DECODE OK / IDENTITY UNCONFIRMED | Дом кино | id=Domkino.ru | match=canonical exact | 6 frames decoded; 6 non-flat | http://88.212.15.50/live/test_dom_kino/playlist.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | Смотрим 100% Любовь | id=Smotrim100Lyubov.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://stream.smotrim.ru/hls/fasttv01/playlist_2.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | Звезда Плюс | id=ZvezdaPlus.ru | match=canonical exact | 6 frames decoded; 6 non-flat | http://tvzvezda.bonus-tv.ru/cdn/zvezdaplus/playlist.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | НТВ (+4) | id=NTV.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/7.m3u8
+NO DECODED STREAM | НТВ (+4) | id=NTV.ru | match=explicit channel_id | candidates=1 | FFmpeg could not decode video
 DECODE OK / IDENTITY UNCONFIRMED | ТНТ | id=TNT.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/23.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | Пятница! | id=Friday.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://vod.tuva.ru/friday/index.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | Пятый канал | id=Channel5.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/8.m3u8
@@ -45,5 +46,6 @@ DECODE OK / IDENTITY UNCONFIRMED | МИР (+4) | id=Mir.ru | match=explicit chan
 DECODE OK / IDENTITY UNCONFIRMED | Звезда | id=Zvezda.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/21.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | МУЗ ТВ | id=MuzTV.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/20.m3u8
 
-SUMMARY: decoded=21/41; no decoded stream=20
-Do not treat DECODE OK as visual confirmation of the named channel. Check channel identity in Televizo before relying on it.
+SUMMARY: decoded=20/41; no decoded stream=21
+Regional +4 sources are candidates. Confirm the broadcast time/content visually in Televizo.
+Do not treat DECODE OK as visual confirmation of the named channel.
