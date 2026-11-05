@@ -1,14 +1,17 @@
 import urllib.request
 import re
 import socket
+import base64
 
-# 1. Точные ссылки на рабочие базы (РФ каналы и общая СНГ база)
-SOURCES = [
-    "https://githubusercontent.com",
-    "https://githubusercontent.com"
+# Полные ссылки зашифрованы в Base64, чтобы GitHub Actions не обрезал их при передаче текстом
+# 1. Ссылка на базу iptv-org (РФ)
+# 2. Ссылка на базу Free-IPTV (СНГ)
+ENCODED_SOURCES = [
+    "aHR0cHM6Ly9pcHR2LW9yZy5naXRodWIuaW8vaXB0di9jb3VudHJpZXMvcnUubTN1",
+    "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0ZyZWUtSVBUVi9JUFRWL21hc3Rlci9wbGF5bGlzdC5tM3U="
 ]
 
-# 2. Список ваших любимых каналов (42 уникальных канала)
+# Список ваших любимых каналов (42 уникальных канала)
 MY_FAVORITE_CHANNELS = [
     "Шансон ТВ", "Мосфильм. Золотая коллекция", "Победа", "Viasat History",
     "Viasat Nature", "TV1000 Русское кино", "Родное кино", "Киносерия",
@@ -36,43 +39,39 @@ def check_link_is_alive(url):
 def clean_name(name):
     """Очищает имя канала от мусора для точного сравнения."""
     name = re.sub(r'\(Dimonovich\)', '', name, flags=re.IGNORECASE)
-    name = re.sub(r'\+4|\(\+4\)|\+4ч|\+4h', '', name) # Временно убираем +4 для сравнения сути названия
+    name = re.sub(r'\+4|\(\+4\)|\+4ч|\+4h', '', name)
     name = re.sub(r'\s+', ' ', name)
     return name.strip().lower()
 
 def main():
     collected_channels = {}
-    
-    # Сопоставляем очищенное имя с красивым оригинальным названием
     favorites_map = {clean_name(ch): ch for ch in MY_FAVORITE_CHANNELS}
 
-    for url in SOURCES:
+    # Декодируем и сканируем источники
+    for encoded_url in ENCODED_SOURCES:
         try:
+            url = base64.b64decode(encoded_url).decode('utf-8')
             print(f"Сканируем источник: {url}")
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
             with urllib.request.urlopen(req, timeout=15) as response:
                 content = response.read().decode('utf-8', errors='ignore')
-                
                 matches = re.findall(r'(#EXTINF:.*?,(.*?)\n(http.*?))(?=\n#EXTINF|\n$|$)', content, re.DOTALL)
                 
                 for full_extinf, channel_name, stream_url in matches:
                     cleaned_src_name = clean_name(channel_name)
                     
                     if cleaned_src_name in favorites_map:
-                        # Проверяем, является ли канал версией +4
                         is_plus_four = any(marker in channel_name for marker in ["+4", "(+4)", "+4h", "Красноярск"])
                         
-                        # Если канал еще не добавлен ИЛИ если старый вариант был без +4, а новый нашелся с "+4"
-                        if cleaned_src_name not in collected_channels or (is_plus_four and not collected_channels[cleaned_src_name][3]):
+                        if cleaned_src_name not in collected_channels or (is_plus_four and not collected_channels[cleaned_src_name]):
                             beautiful_name = favorites_map[cleaned_src_name]
                             if is_plus_four:
                                 beautiful_name += " (+4)"
                                 
                             clean_extinf = f'#EXTINF:-1,{beautiful_name}'
-                            # Сохраняем: (extinf, url, имя, флаг_что_это_плюс_четыре)
                             collected_channels[cleaned_src_name] = (clean_extinf, stream_url.strip(), beautiful_name, is_plus_four)
         except Exception as e:
-            print(f"Ошибка при чтении источника {url}: {e}")
+            print(f"Ошибка при чтении источника: {e}")
 
     # Проверка ссылок на работоспособность
     working_channels = {}
@@ -97,6 +96,7 @@ def main():
 if __name__ == "__main__":
     socket.setdefaulttimeout(4)
     main()
+
 
 
 
