@@ -1,30 +1,57 @@
-IPTV — КОНСЕРВАТИВНАЯ АВТОМАТИЗАЦИЯ
+name: Build verified IPTV playlist
 
-Что делает:
-- Использует структурированные API iptv-org: channels, streams, feeds.
-- Сопоставляет только точный канал или явно указанный alias; fuzzy matching запрещён.
-- Требует, чтобы запись канала была российской.
-- Предпочитает русскоязычные фиды с зоной вещания RU.
-- Проверяет реальный видеотрек через ffprobe, а не только HTTP HEAD.
-- Не допускает повторного URL для разных каналов.
-- Не подставляет старые сомнительные fallback-ссылки: непроверенный канал попадает в update_report.txt, но не в рабочий M3U.
+on:
+  schedule:
+    - cron: "23 2 * * *"
+  workflow_dispatch:
 
-Часовой пояс:
-- В channels/feeds метаданных есть зоны вещания; они записываются в отчёт.
-- XMLTV/EPG время обычно хранится с UTC-offset. Плеер должен конвертировать его в локальную зону устройства.
-- TZ=Asia/Barnaul в скрипте — справочная зона для отчёта, не сдвиг видеопотока.
-- В Televizo включите автоматические дату/время и часовой пояс устройства. Не задавайте глобальный сдвиг, если EPG уже содержит корректные UTC-offset.
+permissions:
+  contents: write
 
-ВАЖНО:
-- ffprobe доказывает наличие видеотрека, но не способен надёжно доказать, что в кадре именно нужный телеканал. Для семантической проверки нужен контрольный просмотр/распознавание логотипа/EPG; автоматическая подмена запрещена.
-- В открытых каталогах могут отсутствовать платные каналы (например, Viasat/TV1000). Такие каналы будут отмечены как NOT MAPPED / NO VERIFIED VIDEO STREAM. Скрипт не обходит платный доступ.
-- Количество рабочих каналов может быть меньше 41. Это намеренно: корректность важнее заполненности.
+concurrency:
+  group: verified-iptv
+  cancel-in-progress: false
 
-Установка:
-1. Распакуйте архив.
-2. Замените в SKOCHE/my-iptv файлы update_playlist.py, channels.json и .github/workflows/auto_update.yml.
-3. Удалите старый update_report.txt, если есть.
-4. Запустите GitHub Actions -> Build verified IPTV playlist -> Run workflow.
-5. Откройте update_report.txt и проверьте причины исключения каналов.
-
-Ссылка на M3U останется прежней: raw GitHub URL favorites.m3u.
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version
+          ffprobe -version
+      - name: Validate required files
+        run: |
+          test -s channels.json
+          python -c "import json; x=json.load(open('channels.json', encoding='utf-8')); assert len(x)==41, len(x)"
+      - name: Build playlist and decode-test streams
+        run: python update_playlist.py
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iptv-update-report
+          path: update_report.txt
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Commit playlist and report
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add favorites.m3u update_report.txt
+          if ! git diff --cached --quiet; then
+            git commit -m "Refresh verified IPTV playlist"
+            git push
+          else
+            echo "No playlist changes."
+          fi
