@@ -1,0 +1,6 @@
+This repository contains a modified version of Guovin/iptv-api.
+Upstream project: https://github.com/Guovin/iptv-api
+Upstream copyright: Copyright (c) 2024-present Govin.
+Modifications for the SKOCHE 41-channel catalog and integration were made on 2026-11-05.
+This modified work is distributed under the GNU Affero General Public License, version 3 (AGPL-3.0).
+The complete corresponding source is included in this repository.
