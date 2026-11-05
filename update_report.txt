@@ -1,9 +1,9 @@
 IPTV v7 diagnostic report
-UTC: 2026-11-05 07:34:13
+UTC: 2026-11-05 08:49:55
 IMPORTANT: decoding confirms only that video can be decoded; it does not verify channel identity.
 Previously reported bad domains excluded: cinerama.uz, linkintel.ru, mcquack.net, thestream.cyou
 
-DECODE OK / IDENTITY UNCONFIRMED | Шансон ТВ | id=ShansonTV.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://hls-shansontv.cdnvideo.ru/shansontv/smil:shansontv.smil/playlist.m3u8
+DECODE OK / IDENTITY UNCONFIRMED | Шансон ТВ | id=ShansonTV.ru | match=canonical exact | 6 frames decoded; 6 non-flat | http://catchup.videoline.ru/shanson/index.m3u8
 NO DECODED STREAM | Победа | id=Pobeda.ru | match=canonical exact | candidates=1 | FFmpeg could not decode video
 NO CHANNEL ID | Viasat History | ambiguous/no exact ID: ViasatHistory.bg,ViasatHistory.cz,ViasatHistory.fi,ViasatHistory.gr,ViasatHistory.hu,ViasatHistory.ro,ViasatHistory.se,ViasatHistory.si,ViasatHistory.tr,ViasatHistory.ua
 NO CHANNEL ID | Viasat Nature | ambiguous/no exact ID: ViasatNature.bg,ViasatNature.cz,ViasatNature.fi,ViasatNature.gr,ViasatNature.hu,ViasatNature.ro,ViasatNature.se,ViasatNature.si,ViasatNature.ua
@@ -16,10 +16,10 @@ DECODE OK / IDENTITY UNCONFIRMED | Дом кино | id=Domkino.ru | match=canon
 DECODE OK / IDENTITY UNCONFIRMED | Смотрим 100% Любовь | id=Smotrim100Lyubov.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://stream.smotrim.ru/hls/fasttv01/playlist_2.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | Звезда Плюс | id=ZvezdaPlus.ru | match=canonical exact | 6 frames decoded; 6 non-flat | http://tvzvezda.bonus-tv.ru/cdn/zvezdaplus/playlist.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | НТВ (+4) | id=NTV.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/7.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | ТНТ | id=TNT.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/23.m3u8
+DECODE OK / IDENTITY UNCONFIRMED | ТНТ | id=TNT.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/23.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | Пятница! | id=Friday.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://vod.tuva.ru/friday/index.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | Пятый канал | id=Channel5.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/8.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | СТС | id=STS.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/16.m3u8
+DECODE OK / IDENTITY UNCONFIRMED | СТС | id=STS.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/16.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | ТВ3 | id=TV3.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/18.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | Че! | id=Che.ru | match=canonical exact | 6 frames decoded; 6 non-flat | http://176.118.197.101/Che/index.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | Домашний | id=Domashniy.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/17.m3u8
@@ -38,12 +38,12 @@ NO DECODED STREAM | Мосфильм. Золотая коллекция | id=Mos
 NO CHANNEL ID | Россия 1 HD (+4) | ambiguous/no exact ID: 
 DECODE OK / IDENTITY UNCONFIRMED | Россия 24 | id=Russia24.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://stream.smotrim.ru/hls2/russia24nl_smotrim/playlist_5.m3u8
 NO CHANNEL ID | Дом кино Премиум HD | ambiguous/no exact ID: 
-DECODE OK / IDENTITY UNCONFIRMED | Первый канал | id=ChannelOne.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/4.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | Рен ТВ | id=RENTV.ru | match=canonical exact | 6 frames decoded; 6 non-flat | http://185.23.80.23:8080/REN/index.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | ТВЦ | id=TVCentr.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://tvc-hls.cdnvideo.ru/tvc-res/smil:vd9221.smil/playlist.m3u8
+DECODE OK / IDENTITY UNCONFIRMED | Первый канал | id=ChannelOne.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/4.m3u8
+DECODE OK / IDENTITY UNCONFIRMED | Рен ТВ | id=RENTV.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | http://185.23.80.23:8080/REN/index.m3u8
+DECODE OK / IDENTITY UNCONFIRMED | ТВЦ | id=TVCentr.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://tvc-hls.cdnvideo.ru/tvc-res/smil:vd9221.smil/playlist.m3u8
 DECODE OK / IDENTITY UNCONFIRMED | МИР (+4) | id=Mir.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://tvcdn01.oktv.kz/tv/mir/index.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | Звезда | id=Zvezda.ru | match=canonical exact | 6 frames decoded; 5 non-flat | https://streaming.televizor-24-tochka.ru/live/21.m3u8
-DECODE OK / IDENTITY UNCONFIRMED | МУЗ ТВ | id=MuzTV.ru | match=canonical exact | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/20.m3u8
+DECODE OK / IDENTITY UNCONFIRMED | Звезда | id=Zvezda.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/21.m3u8
+DECODE OK / IDENTITY UNCONFIRMED | МУЗ ТВ | id=MuzTV.ru | match=explicit channel_id | 6 frames decoded; 6 non-flat | https://streaming.televizor-24-tochka.ru/live/20.m3u8
 
 SUMMARY: decoded=21/41; no decoded stream=20
 Do not treat DECODE OK as visual confirmation of the named channel. Check channel identity in Televizo before relying on it.
