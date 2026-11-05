@@ -1,0 +1,45 @@
+IPTV automatic audit | preferred viewer timezone: Asia/Barnaul
+EPG programme times are UTC-based; Televizo should use the device's automatic local timezone.
+A successful ffprobe confirms a video stream exists, not the channel's editorial identity.
+
+VIDEO STREAM OK: Шансон ТВ | ShansonTV.ru | feed=SD | feed_timezone=Europe/Moscow | url=https://streaming.thestream.cyou/live/7009.m3u8
+VIDEO STREAM OK: Победа | Pobeda.ru | feed=SD | feed_timezone=Europe/Moscow | url=https://streaming.thestream.cyou/live/43.m3u8
+NOT MAPPED (0 or ambiguous database IDs): Viasat History | IDs=['ViasatHistory.bg', 'ViasatHistory.cz', 'ViasatHistory.fi', 'ViasatHistory.gr', 'ViasatHistory.hu', 'ViasatHistory.ro', 'ViasatHistory.se', 'ViasatHistory.si', 'ViasatHistory.tr', 'ViasatHistory.ua']
+NOT MAPPED (0 or ambiguous database IDs): Viasat Nature | IDs=['ViasatNature.bg', 'ViasatNature.cz', 'ViasatNature.fi', 'ViasatNature.gr', 'ViasatNature.hu', 'ViasatNature.ro', 'ViasatNature.se', 'ViasatNature.si', 'ViasatNature.ua']
+VIDEO STREAM OK: TV1000 Русское кино | vijuTV1000russkoe.ru | feed=SD | feed_timezone=Europe/Moscow | url=https://stream8.cinerama.uz/1058/tracks-v1a1/mono.m3u8
+VIDEO STREAM OK: Родное кино | RodnoeKino.ru | feed=SD | feed_timezone=Europe/Moscow | url=https://stream8.cinerama.uz/1052/tracks-v1a1/mono.m3u8
+VIDEO STREAM OK: Киносерия | Kinoseriya.ru | feed=SD | feed_timezone=Europe/Moscow | url=https://fs.uplink.kz/kinoseria/mono.m3u8?token=onlinetv
+VIDEO STREAM OK: Наше новое кино | NasheNovoeKino.ru | feed=SD | feed_timezone=Europe/Moscow | url=https://stream8.cinerama.uz/1051/tracks-v1a1/mono.m3u8
+VIDEO STREAM OK: ТНТ4 | TNT4.ru | feed=SD | feed_timezone=Europe/Moscow | url=https://zabava-htlive.cdn.ngenix.net/hls/CH_TNT4/variant.m3u8
+VIDEO STREAM OK: Дом кино | Domkino.ru | feed=SD | feed_timezone=Europe/Moscow | url=https://stream8.cinerama.uz/1054/tracks-v1a1/mono.m3u8
+VIDEO STREAM OK: Смотрим 100% Любовь | Smotrim100Lyubov.ru | feed=SD | feed_timezone=Europe/Moscow | url=https://stream.smotrim.ru/hls/fasttv01/playlist_2.m3u8
+NO VERIFIED VIDEO STREAM: Звезда Плюс | ZvezdaPlus.ru | candidates=0
+NOT MAPPED (0 or ambiguous database IDs): НТВ (+4) | IDs=['NTV.rs', 'NTV.ru', 'Nova.bg']
+NOT MAPPED (0 or ambiguous database IDs): ТНТ | IDs=['TNT.es', 'TNT.pl', 'TNT.ru', 'TNT.us', 'WarnerTV.es', 'WarnerTV.pl']
+VIDEO STREAM OK: Пятница! | Friday.ru | feed=SD | feed_timezone=Europe/Moscow | url=https://vod.tuva.ru/friday/index.m3u8
+NOT MAPPED (0 or ambiguous database IDs): Пятый канал | IDs=['5Kanal.kz', 'Channel5.kg', 'Channel5.ru', 'Channel5.sg', 'Channel5.th', 'Channel5.ua', 'Channel5.uk', 'ZIZTV.kn']
+NOT MAPPED (0 or ambiguous database IDs): СТС | IDs=['CTC.pe', 'STS.ru']
+NOT MAPPED (0 or ambiguous database IDs): ТВ3 | IDs=['TV3.dk', 'TV3.dz', 'TV3.ee', 'TV3.es', 'TV3.gh', 'TV3.kh', 'TV3.lt', 'TV3.lv', 'TV3.mn', 'TV3.my', 'TV3.no', 'TV3.ru', 'TV3.se', 'TV3.si', 'TV3.tz', 'TV3.ws', 'TV3Plus.dk', 'TV3Plus.lv', 'TV3Plus.no', 'TVChosun3.kr', 'VirginMediaOne.ie']
+VIDEO STREAM OK: Че! | Che.ru | feed=SD | feed_timezone=Europe/Moscow | url=https://zabava-htlive.cdn.ngenix.net/hls/CH_PERETZ/variant.m3u8
+VIDEO STREAM OK: Домашний | Domashniy.ru | feed=SD | feed_timezone=Europe/Moscow | url=https://streaming.televizor-24-tochka.ru/live/17.m3u8
+NO VERIFIED VIDEO STREAM: КиноСезон | KinoSezon.ru | candidates=0
+NO VERIFIED VIDEO STREAM: Феникс+ Кино | FeniksplusKino.ru | candidates=0
+VIDEO STREAM OK: Глазами туриста | GlazamiTurista.ru | feed=SD | feed_timezone=Europe/Moscow | url=https://stream8.cinerama.uz/1423/tracks-v1a1/mono.m3u8
+NOT MAPPED (0 or ambiguous database IDs): Перец | IDs=[]
+VIDEO STREAM OK: Живая планета | ZhivayaPlaneta.ru | feed=SD | feed_timezone=Europe/Moscow | url=https://stream8.cinerama.uz/1250/tracks-v1a1/mono.m3u8
+NO VERIFIED VIDEO STREAM: Русский бестселлер | RusskiyBestseller.ru | candidates=0
+NOT MAPPED (0 or ambiguous database IDs): Русская комедия | IDs=[]
+NOT MAPPED (0 or ambiguous database IDs): Премиальное HD | IDs=[]
+NOT MAPPED (0 or ambiguous database IDs): Наше любимое HD | IDs=[]
+NOT MAPPED (0 or ambiguous database IDs): Наш кинопоказ HD | IDs=[]
+NO VERIFIED VIDEO STREAM: Русский иллюзион | RusskiyIllusion.ru | candidates=0
+NO VERIFIED VIDEO STREAM: Мосфильм. Золотая коллекция | MosfilmGoldCollection.ru | candidates=1
+NOT MAPPED (0 or ambiguous database IDs): Россия 1 HD (+4) | IDs=[]
+VIDEO STREAM OK: Россия 24 | Russia24.ru | feed=SD | feed_timezone=Europe/Moscow | url=https://stream.smotrim.ru/hls2/russia24nl_smotrim/playlist_5.m3u8
+NOT MAPPED (0 or ambiguous database IDs): Дом кино Премиум HD | IDs=[]
+NOT MAPPED (0 or ambiguous database IDs): Первый канал | IDs=['1TV.af', '1TV.ge', '1TV.md', 'AlawlaTV.iq', 'ChannelOne.lk', 'ChannelOne.ru', 'ChannelOne.us', 'ENAPLAY.kr']
+VIDEO STREAM OK: Рен ТВ | RENTV.ru | feed=SD | feed_timezone=Europe/Moscow | url=https://zabava-htlive.cdn.ngenix.net/hls/CH_RENTV/variant.m3u8
+NOT MAPPED (0 or ambiguous database IDs): ТВЦ | IDs=['TVC.ec', 'TVC.ge', 'TVC.mx', 'TVC.ng', 'TVC.pl', 'TVCentr.ru', 'TelevisionCaribbean.kn']
+NOT MAPPED (0 or ambiguous database IDs): МИР (+4) | IDs=['Mir.ru', 'MirNovosibirsk.ru']
+NOT MAPPED (0 or ambiguous database IDs): Звезда | IDs=['Zvezda.ru', 'ZvezdaTV.rs']
+NOT MAPPED (0 or ambiguous database IDs): МУЗ ТВ | IDs=['MuzTV.az', 'MuzTV.ru']
