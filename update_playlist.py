@@ -23,9 +23,15 @@ BLOCKED = {'cinerama.uz', 'mcquack.net', 'linkintel.ru', 'thestream.cyou'}
 BARNAUL_PLUS4 = {
     'НТВ (+4)': 'https://cdn.ntv.ru/ntv4/playlist.m3u8',
     'Россия 1 HD (+4)': 'https://vgtrkregion-reg.cdnvideo.ru/vgtrk/barnaul/russia1-sd/index.m3u8',
+    'МИР (+4)': 'http://hls.mirtv.cdnvideo.ru/mirtv-parampublish/mirtv3_2500/playlist.m3u8',
 }
-# Do not substitute a generic feed for a regional channel.
-NO_GENERIC_STREAMS = {'МИР (+4)'}
+# Keep regional EPG identifiers distinct from the Moscow/base channel.
+REGIONAL_TVG_IDS = {
+    'НТВ (+4)': 'NTV.ru@Plus4',
+    'МИР (+4)': 'Mir.ru@Plus4',
+}
+# Regional channels must never fall back to a generic/Moscow stream.
+NO_GENERIC_STREAMS = set(BARNAUL_PLUS4)
 
 # Additional candidates collected from independent public M3U repositories.
 # They are NOT assumed working: every URL is tested by FFmpeg at run time.
@@ -90,12 +96,13 @@ def decode_test(stream):
         headers = [f"User-Agent: {stream.get('user_agent') or UA}"]
         if stream.get('referrer'):
             headers.append('Referer: ' + stream['referrer'])
-        cmd = ['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-rw_timeout','18000000',
+        cmd = ['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-rw_timeout','12000000',
                '-headers','\r\n'.join(headers)+'\r\n','-i',stream['url'],'-t','10',
                '-vf','fps=1,scale=160:90','-frames:v','6','-f','image2pipe','-vcodec','mjpeg','-']
-        p = subprocess.run(cmd, capture_output=True, timeout=28)
+        p = subprocess.run(cmd, capture_output=True, timeout=20)
         if p.returncode or not p.stdout:
-            return False, 'FFmpeg could not decode video'
+            detail = (p.stderr.decode('utf-8', 'replace').strip().splitlines() or ['no video output'])[-1]
+            return False, ('FFmpeg: ' + detail)[:180]
         b, pos, frames = p.stdout, 0, []
         while True:
             a = b.find(b'\xff\xd8', pos)
@@ -148,11 +155,11 @@ def main():
                 name_index.setdefault(norm(n), set()).add(c['id'])
 
     report = [
-        'IPTV v12 expanded-source diagnostic report',
+        'IPTV v13 regional-source and diagnostics report',
         'UTC: ' + time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()),
         'IMPORTANT: FFmpeg decode confirms video availability, NOT channel identity.',
         'Regional target: Barnaul, Moscow time +4.',
-        'NTV +4 and Russia 1 HD +4 are handled as explicit regional candidates.',
+        'NTV +4, Russia 1 Barnaul, and MIR +4 are explicit regional candidates.',
         'Expanded supplemental M3U candidates are tested; decode does not prove channel identity.',
         'Previously reported bad domains excluded: ' + ', '.join(sorted(BLOCKED)), ''
     ]
@@ -185,7 +192,7 @@ def main():
             regional_url = BARNAUL_PLUS4[name]
             candidates = []
             if regional_url not in used:
-                candidates = [(100, {'url': regional_url, 'user_agent': UA}, {})]
+                candidates = [(100, {'url': regional_url, 'user_agent': UA}, {'source': 'explicit regional public playlist'})]
             else:
                 report.append(f'DUPLICATE REGIONAL URL | {name} | {regional_url}')
                 epg_lines.append(f'{name} | | regional URL duplicated')
@@ -251,7 +258,7 @@ def main():
         url = st['url']
         used.add(url)
         passed += 1
-        tvg_id = cid or ''
+        tvg_id = REGIONAL_TVG_IDS.get(name, cid or '')
         output.append(f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{name}" group-title="IPTV",{name}')
         output.append(url)
         status = 'BARNAUL +4 CANDIDATE / IDENTITY UNCONFIRMED' if is_regional or name in {'МИР (+4)', 'Россия 1 HD (+4)'} else 'DECODE OK / IDENTITY UNCONFIRMED'
