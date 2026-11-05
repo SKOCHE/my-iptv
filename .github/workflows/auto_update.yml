@@ -3,32 +3,26 @@ name: Build strict Android TV IPTV playlist
 on:
   workflow_dispatch:
   schedule:
-    - cron: '17 2 * * *'
+    - cron: "17 2 * * *"
   push:
-    branches:
-      - main
     paths:
-      - 'channels.json'
-      - 'update_playlist.py'
-      - 'validate_config.py'
-      - '.github/workflows/auto_update.yml'
-
-# Do not let two runs build and push to main at the same time.
-# Queued runs wait for the active run instead of cancelling it.
-concurrency:
-  group: iptv-playlist-main
-  cancel-in-progress: false
+      - "channels.json"
+      - "update_playlist.py"
+      - "validate_config.py"
+      - ".github/workflows/auto_update.yml"
 
 permissions:
   contents: write
 
+concurrency:
+  group: iptv-playlist-main
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
-
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           ref: main
@@ -37,7 +31,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Install dependencies
         run: |
@@ -46,15 +40,13 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install Pillow
 
-      - name: Validate 41-channel manifest
+      - name: Validate configuration
         run: python validate_config.py
 
       - name: Build playlist
-        env:
-          MINIMUM_TO_PUBLISH: '5'
         run: python update_playlist.py
 
-      - name: Upload diagnostic files
+      - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -63,26 +55,42 @@ jobs:
             update_report.txt
             epg_mapping.txt
           if-no-files-found: warn
+          retention-days: 14
 
-      - name: Commit playlist and reports
+      - name: Publish generated playlist without rebase conflicts
         if: success()
+        shell: bash
         run: |
           set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          # Keep the generated outputs outside the Git working tree.
+          mkdir -p "$RUNNER_TEMP/iptv-generated"
+          cp favorites.m3u "$RUNNER_TEMP/iptv-generated/favorites.m3u"
+          cp update_report.txt "$RUNNER_TEMP/iptv-generated/update_report.txt"
+          cp epg_mapping.txt "$RUNNER_TEMP/iptv-generated/epg_mapping.txt"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Refresh main, then base the generated files on the latest remote tree.
+          git fetch origin main
+          git reset --hard origin/main
+
+          # Restore the newly generated files on top of the latest main.
+          cp "$RUNNER_TEMP/iptv-generated/favorites.m3u" favorites.m3u
+          cp "$RUNNER_TEMP/iptv-generated/update_report.txt" update_report.txt
+          cp "$RUNNER_TEMP/iptv-generated/epg_mapping.txt" epg_mapping.txt
+
           git add favorites.m3u update_report.txt epg_mapping.txt
 
           if git diff --cached --quiet; then
-            echo 'No changes to commit'
+            echo "No playlist or diagnostic changes to publish."
             exit 0
           fi
 
-          git commit -m 'Update IPTV playlist and diagnostics'
-
-          # Incorporate any commits pushed to main while this job was running.
-          git fetch origin main
-          git rebase origin/main
+          git commit -m "Update IPTV playlist and diagnostics"
           git push origin HEAD:main
+
 
 
 
