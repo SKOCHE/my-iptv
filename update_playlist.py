@@ -22,10 +22,34 @@ BLOCKED = {'cinerama.uz', 'mcquack.net', 'linkintel.ru', 'thestream.cyou'}
 # but visual inspection in Televizo is still required to confirm channel identity.
 BARNAUL_PLUS4 = {
     'НТВ (+4)': 'https://cdn.ntv.ru/ntv4/playlist.m3u8',
-    'Россия 1 HD (+4)': 'https://vgtrkregion-reg.cdnvideo.ru/vgtrk/4/russia1-hd/index.m3u8',
+    'Россия 1 HD (+4)': 'https://vgtrkregion-reg.cdnvideo.ru/vgtrk/barnaul/russia1-sd/index.m3u8',
 }
 # Do not substitute a generic feed for a regional channel.
 NO_GENERIC_STREAMS = {'МИР (+4)'}
+
+# Additional candidates collected from independent public M3U repositories.
+# They are NOT assumed working: every URL is tested by FFmpeg at run time.
+# Known-bad domains remain excluded by BLOCKED above.
+SUPPLEMENTAL_CANDIDATES = {
+    'Победа': ['http://91.197.104.34:8080/Pobeda/video.m3u8'],
+    'Родное кино': ['https://cdn-cache01.voka.tv:443/live/80.m3u8'],
+    'ТНТ4': [
+        'https://bl.uma.media/live/317849/HLS/4614144_3/2/1/playlist.m3u8',
+        'http://176.118.197.101/TNT4/index.m3u8',
+    ],
+    'Наше новое кино': ['https://cdn-cache01.voka.tv:443/live/75.m3u8'],
+    'Перец': ['http://dmi3y-tv.ru/hls/blrus/CH_PERETZ_INTERNATIONAL.m3u8'],
+    'Феникс+ Кино': ['https://tbs01-edge11.itdc.ge/fenixkino/tracks-v1a1/mono.m3u8'],
+    'Русский бестселлер': ['http://dmi3y-tv.ru/hls/CH_RUSSKIY_BESTSELLER.m3u8'],
+    'Русский иллюзион': ['https://cdn-cache01.voka.tv:443/live/616.m3u8'],
+    'Дом кино Премиум HD': ['https://tbs01-edge11.itdc.ge/domkinopremium/tracks-v1a1/mono.m3u8'],
+    'МИР (+4)': ['http://hls.mirtv.cdnvideo.ru/mirtv-parampublish/mirtv3_2500/playlist.m3u8'],
+    # Барнаул-specific VGTRK regional endpoint (SD). Keep this distinct from Moscow HD.
+    'Россия 1 HD (+4)': ['https://vgtrkregion-reg.cdnvideo.ru/vgtrk/barnaul/russia1-sd/index.m3u8'],
+    # Legacy Viasat channel names may now be branded viju; identity must be checked in Televizo.
+    'Viasat History': ['https://fs.uplink.kz/viju_history/mono.m3u8?token=onlinetv'],
+    'Viasat Nature': ['https://fs.uplink.kz/viju_nature/mono.m3u8?token=onlinetv'],
+}
 
 def norm(s):
     s = (s or '').casefold().replace('ё', 'е')
@@ -124,12 +148,12 @@ def main():
                 name_index.setdefault(norm(n), set()).add(c['id'])
 
     report = [
-        'IPTV v11 diagnostic report',
+        'IPTV v12 expanded-source diagnostic report',
         'UTC: ' + time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()),
         'IMPORTANT: FFmpeg decode confirms video availability, NOT channel identity.',
         'Regional target: Barnaul, Moscow time +4.',
         'NTV +4 and Russia 1 HD +4 are handled as explicit regional candidates.',
-        'MIR +4 is NOT substituted with a generic/Moscow stream.',
+        'Expanded supplemental M3U candidates are tested; decode does not prove channel identity.',
         'Previously reported bad domains excluded: ' + ', '.join(sorted(BLOCKED)), ''
     ]
     epg_lines = ['# name | tvg-id | XMLTV source URLs (if listed)']
@@ -170,32 +194,38 @@ def main():
             cid, match, ch = item.get('channel_id'), 'explicit Barnaul +4 URL', {}
         else:
             cid, match = resolve_channel(item, channels, name_index)
-            if not cid:
-                report.append(f'NO CHANNEL ID | {name} | {match}')
-                epg_lines.append(f'{name} | | no channel ID')
+            ch = byid.get(cid, {}) if cid else {}
+            candidates = []
+            # Add independent M3U candidates first, even when iptv-org has no unambiguous ID.
+            # This widens discovery beyond exact catalog matching.
+            for extra_url in SUPPLEMENTAL_CANDIDATES.get(name, []):
+                if extra_url not in used and not is_blocked(extra_url):
+                    candidates.append((30, {'url': extra_url, 'user_agent': UA}, {'source': 'supplemental public M3U'}))
+            stream_source = [] if name in NO_GENERIC_STREAMS else streams
+            if cid:
+                for st in stream_source:
+                    if st.get('channel') != cid:
+                        continue
+                    url = (st.get('url') or '').strip()
+                    if not url.startswith(('https://', 'http://')) or url in used or is_blocked(url):
+                        continue
+                    labels = set(st.get('labels') or [])
+                    if labels & {'Geo-blocked', 'Not 24/7'}:
+                        continue
+                    feed = feedmap.get((cid, st.get('feed')), {})
+                    langs = set(feed.get('languages') or [])
+                    areas = set(feed.get('broadcast_area') or [])
+                    if langs and 'rus' not in langs and ch.get('country') != 'RU':
+                        continue
+                    score = (8 if 'rus' in langs else 0) + (5 if {'c/RU', 'r/RU'} & areas else 0)
+                    score += 2 if feed.get('is_main') else 0
+                    score += 1 if url.startswith('https://') else 0
+                    candidates.append((score, st, feed))
+            elif not candidates:
+                report.append(f'NO CHANNEL ID | {name} | {match}; no supplemental URL')
+                epg_lines.append(f'{name} | | no channel ID / no guide')
                 add_unavailable(item, None, match)
                 continue
-            ch = byid[cid]
-            candidates = []
-            stream_source = [] if name in NO_GENERIC_STREAMS else streams
-            for st in stream_source:
-                if st.get('channel') != cid:
-                    continue
-                url = (st.get('url') or '').strip()
-                if not url.startswith(('https://', 'http://')) or url in used or is_blocked(url):
-                    continue
-                labels = set(st.get('labels') or [])
-                if labels & {'Geo-blocked', 'Not 24/7'}:
-                    continue
-                feed = feedmap.get((cid, st.get('feed')), {})
-                langs = set(feed.get('languages') or [])
-                areas = set(feed.get('broadcast_area') or [])
-                if langs and 'rus' not in langs and ch.get('country') != 'RU':
-                    continue
-                score = (8 if 'rus' in langs else 0) + (5 if {'c/RU', 'r/RU'} & areas else 0)
-                score += 2 if feed.get('is_main') else 0
-                score += 1 if url.startswith('https://') else 0
-                candidates.append((score, st, feed))
 
         candidates.sort(key=lambda x: x[0], reverse=True)
         reasons = []
@@ -224,8 +254,8 @@ def main():
         tvg_id = cid or ''
         output.append(f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{name}" group-title="IPTV",{name}')
         output.append(url)
-        status = 'BARNAUL +4 CANDIDATE / IDENTITY UNCONFIRMED' if is_regional else 'DECODE OK / IDENTITY UNCONFIRMED'
-        report.append(f'{status} | {name} | id={cid or "regional override"} | match={match} | {reason} | {url}')
+        status = 'BARNAUL +4 CANDIDATE / IDENTITY UNCONFIRMED' if is_regional or name in {'МИР (+4)', 'Россия 1 HD (+4)'} else 'DECODE OK / IDENTITY UNCONFIRMED'
+        report.append(f'{status} | {name} | id={cid or "supplemental"} | match={match} | source={feed.get('source', "iptv-org")} | {reason} | {url}')
 
         guide_urls = []
         if cid:
@@ -239,7 +269,7 @@ def main():
         f'SUMMARY: playable_candidates={passed}/41; placeholders={placeholders}; total_playlist_entries={passed+placeholders}/41',
         'A PLACEHOLDER is visible in Televizo but cannot play; it is not a working stream.',
         'Regional +4 URLs are candidates; verify broadcast identity/time in Televizo.',
-        'MIR (+4) is intentionally not mapped to a generic stream.',
+        'MIR (+4) uses only the published Mir +4 candidate; verify regional time in Televizo.',
         'Never treat DECODE OK as visual confirmation of the named channel.'
     ]
     REPORT.write_text('\n'.join(report) + '\n', encoding='utf-8')
