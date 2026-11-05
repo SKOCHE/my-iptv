@@ -27,6 +27,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip pillow
           ffmpeg -version
           ffprobe -version
       - name: Validate required files
@@ -55,7 +56,3 @@ jobs:
           else
             echo "No playlist changes."
           fi
-
-
-
-
