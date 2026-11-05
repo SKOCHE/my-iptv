@@ -1,0 +1,16 @@
+# SKOCHE IPTV: источники для поиска кандидатов.
+# Все потоки проходят проверку Guovin; наличие в источнике не означает, что канал доступен у Ростелекома.
+# Источники с Wink/Zabava отсекаются blacklist.txt.
+https://iptv-org.github.io/iptv/countries/ru.m3u
+https://iptv-org.github.io/iptv/languages/rus.m3u
+https://ngrch.github.io/iptv/ru.m3u
+https://dearbulut.github.io/iptv/playlists/country/ru.m3u
+https://raw.githubusercontent.com/substanc1/iptv-russia/main/streams/ru.m3u
+https://raw.githubusercontent.com/denxvofficial/IPTV/refs/heads/main/iptv.m3u
+https://raw.githubusercontent.com/denxvofficial/IPTV/refs/heads/main/iptv-top.m3u
+https://raw.githubusercontent.com/AdeelWajid/iptv_validated_list/main/playlists/countries/ru.m3u
+https://raw.githubusercontent.com/MaximKiselev/iptv/main/playlist.m3u
+https://raw.githubusercontent.com/boxer180/RUSSIA_TV/main/IPTV.m3u
+https://raw.githubusercontent.com/swoldier-rus/IP_TV/main/sw.m3u
+https://raw.githubusercontent.com/swoldier-rus/IP_TV/main/sw2.m3u
+https://raw.githubusercontent.com/smolnp/IPTVru/refs/heads/gh-pages/IPTVstable.m3u8
