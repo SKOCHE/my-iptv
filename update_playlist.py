@@ -25,30 +25,42 @@ def req(url,timeout=TIMEOUT,headers=None):
         body = r.read(4096)
         return r.status, r.headers, body
 def normalize(s):
+    # Keep regional suffixes such as +4: stripping them caused NTV and NTV+4
+    # (and MIR / MIR+4) to collapse into the same channel name.
     s=s.lower().replace("ё","е")
-    s=re.sub(r"\([^)]*\)|\+\s*4\s*ч?|\+4h|красноярск"," ",s)
+    s=s.replace("+"," plus ")
     s=re.sub(r"[^a-zа-я0-9]+"," ",s)
     return " ".join(s.split())
+
 ALIASES={
- "Рен ТВ":["РЕН ТВ","REN TV"],"ТВЦ":["ТВ Центр","ТВЦ"],"ТВ3":["ТВ-3","TV3"],
- "Че!":["Че","Че ТВ"],"Мосфильм. Золотая коллекция":["Мосфильм Золотая коллекция","Mosfilm"],
- "Наш кинопоказ HD":["Наш кинопоказ","Кинопоказ HD"],"Россия 24":["Россия24"],
- "Viasat History":["Viju History","Viasat History HD"],"Viasat Nature":["Viju Nature","Viasat Nature HD"],
- "МУЗ ТВ":["МУЗ-ТВ","Muz TV","MuzTV"],"Родное кино":["РодноеКино"],
- "Наше новое кино":["НашеНовоеКино"],"Русский бестселлер":["РусскийБестселлер"]
+ "Рен ТВ":["РЕН ТВ","REN TV"],
+ "ТВЦ":["ТВ Центр","ТВЦ","TVC"],
+ "ТВ3":["ТВ-3","TV3"],
+ "Че!":["ЧЕ!","CHE TV"],
+ "Перец":["Перец ТВ","Перец"],
+ "Мосфильм. Золотая коллекция":["Мосфильм Золотая коллекция","Mosfilm Gold Collection"],
+ "Наш кинопоказ HD":["Наш кинопоказ","Кинопоказ HD"],
+ "Россия 24":["Россия24","Russia 24"],
+ "Viasat History":["Viju History","Viasat History HD"],
+ "Viasat Nature":["Viju Nature","Viasat Nature HD"],
+ "МУЗ ТВ":["МУЗ-ТВ","Muz TV","MuzTV"],
+ "Родное кино":["РодноеКино"],
+ "Наше новое кино":["НашеНовоеКино"],
+ "Русский бестселлер":["РусскийБестселлер"],
+ "НТВ (+4)":["НТВ плюс 4","НТВ 4","NTV +4","NTV plus 4"],
+ "МИР (+4)":["МИР плюс 4","МИР 4","MIR +4","MIR plus 4"],
+ "Россия 1 HD (+4)":["Россия 1 HD плюс 4","Россия 1 плюс 4","Russia 1 HD +4"]
 }
+# Names that are too generic to be safe as aliases are deliberately omitted.
 def names_for(ch):
     return {normalize(ch),*(normalize(x) for x in ALIASES.get(ch,[]))}
+
 def match_channel(name):
     n=normalize(name)
     if not n: return None
-    matches=[]
-    for ch in CHANNELS:
-        variants=names_for(ch)
-        # strict token-aware substring; fuzzy matching intentionally avoided
-        if n in variants or any(len(v)>=6 and (v in n or n in v) for v in variants):
-            matches.append(ch)
+    matches=[ch for ch in CHANNELS if n in names_for(ch)]
     return matches[0] if len(matches)==1 else None
+
 def parse_m3u(text,source):
     lines=[x.strip() for x in text.replace("\ufeff","").splitlines()]
     ext=None; out=[]
@@ -60,7 +72,9 @@ def parse_m3u(text,source):
                 name=ext.rsplit(",",1)[-1].strip() if "," in ext else ""
                 tvg=re.search(r'tvg-name="([^"]+)"',ext,re.I)
                 if tvg and (not name or name.lower() in ("channel","")): name=tvg.group(1)
-                out.append({"name":name,"url":line,"extinf":ext,"source":source})
+                tvgid=re.search(r'tvg-id="([^"]+)"',ext,re.I)
+                out.append({"name":name,"tvg_id":tvgid.group(1) if tvgid else "",
+                            "url":line,"extinf":ext,"source":source})
             ext=None
     return out
 def github_tree(repo):
@@ -137,9 +151,17 @@ def main():
     log(f"TOTAL SOURCE RECORDS: {len(records)}")
     # Keep all exact name matches and every variant URL, not just one per channel.
     candidates={}
+    rejected_wink=0
     for rec in records:
+        host=(urllib.parse.urlparse(rec["url"]).hostname or "").lower()
+        # User already reported these streams resolve to a territory-blocked Wink screen.
+        if host == "zabava-htlive.cdn.ngenix.net" or host.endswith(".zabava.cdn.ngenix.net"):
+            rejected_wink += 1
+            continue
         ch=match_channel(rec["name"])
-        if ch: candidates.setdefault((ch,rec["url"]),rec)
+        if ch:
+            candidates.setdefault((ch,rec["url"]),rec)
+    log(f"REJECTED WINK/ZABAVA CANDIDATES: {rejected_wink}")
     # User-confirmed links are pinned and never auto-removed by a remote probe.
     pinned={(x["channel"],x["url"]):{"source":"USER_CONFIRMED"} for x in CFG["confirmed_streams"]}
     for k,v in pinned.items(): candidates[k]=v
