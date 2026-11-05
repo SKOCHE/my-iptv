@@ -1,5 +1,4 @@
-name: Build strict Android TV IPTV playlist
-
+name: IPTV Aggregator — collect, check and publish
 on:
   workflow_dispatch:
   schedule:
@@ -10,94 +9,58 @@ on:
       - "update_playlist.py"
       - "validate_config.py"
       - ".github/workflows/auto_update.yml"
-
 permissions:
   contents: write
-
 concurrency:
-  group: iptv-playlist-main
+  group: iptv-aggregator-main
   cancel-in-progress: false
-
 jobs:
   build:
-    # Pin the OS instead of following ubuntu-latest migration.
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Check and install only missing tools
-        shell: bash
+      - name: Install FFmpeg
         run: |
-          set -euo pipefail
-          echo "Runner OS: $(. /etc/os-release && echo "$PRETTY_NAME")"
-          if command -v ffmpeg >/dev/null 2>&1; then
-            echo "FFmpeg is already installed: $(ffmpeg -version | head -n 1)"
-          else
-            echo "FFmpeg is missing; installing minimal package set..."
-            sudo apt-get install -y --no-install-recommends ffmpeg || {
-              echo "Apt package lists unavailable; updating once and retrying..."
-              sudo apt-get update
-              sudo apt-get install -y --no-install-recommends ffmpeg
-            }
-          fi
-          if python -c "from PIL import Image" >/dev/null 2>&1; then
-            echo "Pillow is already installed"
-          else
-            python -m pip install --disable-pip-version-check Pillow
-          fi
-
-      - name: Validate configuration
-        run: python validate_config.py
-
-      - name: Build playlist
-        run: python update_playlist.py
-
-      - name: Upload diagnostics
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - name: Validate config
+        run: python3 validate_config.py
+      - name: Build aggregator
+        run: python3 update_playlist.py
+      - name: Upload reports and candidate playlist
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: iptv-diagnostics
+          name: iptv-aggregator-results
           path: |
             update_report.txt
-            epg_mapping.txt
+            test_candidates.m3u
+            favorites.m3u
           if-no-files-found: warn
-          retention-days: 14
-
-      - name: Publish generated playlist without rebase conflicts
+          retention-days: 30
+      - name: Publish generated files
         if: success()
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/iptv-generated"
-          cp favorites.m3u "$RUNNER_TEMP/iptv-generated/favorites.m3u"
-          cp update_report.txt "$RUNNER_TEMP/iptv-generated/update_report.txt"
-          cp epg_mapping.txt "$RUNNER_TEMP/iptv-generated/epg_mapping.txt"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p "$RUNNER_TEMP/iptv-output"
+          for f in favorites.m3u test_candidates.m3u update_report.txt; do
+            if [ -f "$f" ]; then cp "$f" "$RUNNER_TEMP/iptv-output/$f"; fi
+          done
           git fetch origin main
           git reset --hard origin/main
-          cp "$RUNNER_TEMP/iptv-generated/favorites.m3u" favorites.m3u
-          cp "$RUNNER_TEMP/iptv-generated/update_report.txt" update_report.txt
-          cp "$RUNNER_TEMP/iptv-generated/epg_mapping.txt" epg_mapping.txt
-          git add favorites.m3u update_report.txt epg_mapping.txt
+          cp "$RUNNER_TEMP/iptv-output/"* .
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add favorites.m3u test_candidates.m3u update_report.txt
           if git diff --cached --quiet; then
-            echo "No playlist or diagnostic changes to publish."
+            echo "No generated changes"
             exit 0
           fi
-          git commit -m "Update IPTV playlist and diagnostics"
+          git commit -m "Run IPTV aggregator and refresh diagnostics"
           git push origin HEAD:main
-
-
-
-
-
