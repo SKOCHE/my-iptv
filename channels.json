@@ -1,289 +1,135 @@
-[
-  {
-    "name": "Шансон ТВ",
-    "aliases": [
-      "Shanson TV",
-      "Chanson TV"
-    ]
-  },
-  {
-    "name": "Победа",
-    "aliases": [
-      "Pobeda",
-      "Победа ТВ"
-    ]
-  },
-  {
-    "name": "Viasat History",
-    "aliases": [
-      "Viasat History HD"
-    ]
-  },
-  {
-    "name": "Viasat Nature",
-    "aliases": [
-      "Viasat Nature HD"
-    ]
-  },
-  {
-    "name": "TV1000 Русское кино",
-    "aliases": [
-      "TV1000 Russian Kino",
-      "TV1000 Russkoe Kino"
-    ]
-  },
-  {
-    "name": "Родное кино",
-    "aliases": [
-      "Rodnoe Kino"
-    ]
-  },
-  {
-    "name": "Киносерия",
-    "aliases": [
-      "Kinoseriya",
-      "Kino Seriya"
-    ]
-  },
-  {
-    "name": "Наше новое кино",
-    "aliases": [
-      "Nashe Novoe Kino"
-    ]
-  },
-  {
-    "name": "ТНТ4",
-    "aliases": [
-      "TNT4",
-      "TNT 4"
-    ]
-  },
-  {
-    "name": "Дом кино",
-    "aliases": [
-      "Dom Kino"
-    ]
-  },
-  {
-    "name": "Смотрим 100% Любовь",
-    "aliases": [
-      "100% Love",
-      "Smotrim 100% Lyubov"
-    ]
-  },
-  {
-    "name": "Звезда Плюс",
-    "aliases": [
-      "Zvezda Plus"
-    ]
-  },
-  {
-    "name": "НТВ (+4)",
-    "aliases": [
-      "NTV +4",
-      "NTV4"
-    ],
-    "channel_id": "NTV.ru"
-  },
-  {
-    "name": "ТНТ",
-    "aliases": [
-      "TNT"
-    ],
-    "channel_id": "TNT.ru"
-  },
-  {
-    "name": "Пятница!",
-    "aliases": [
-      "Pyatnitsa",
-      "Friday!"
-    ]
-  },
-  {
-    "name": "Пятый канал",
-    "aliases": [
-      "Channel 5",
-      "Pyaty Kanal"
-    ],
-    "channel_id": "Channel5.ru"
-  },
-  {
-    "name": "СТС",
-    "aliases": [
-      "STS",
-      "CTC"
-    ],
-    "channel_id": "STS.ru"
-  },
-  {
-    "name": "ТВ3",
-    "aliases": [
-      "TV3",
-      "TV-3"
-    ],
-    "channel_id": "TV3.ru"
-  },
-  {
-    "name": "Че!",
-    "aliases": [
-      "Che TV"
-    ]
-  },
-  {
-    "name": "Домашний",
-    "aliases": [
-      "Domashniy",
-      "Domashny"
-    ]
-  },
-  {
-    "name": "КиноСезон",
-    "aliases": [
-      "KinoSezon",
-      "Kino Sezon"
-    ]
-  },
-  {
-    "name": "Феникс+ Кино",
-    "aliases": [
-      "Feniks Kino",
-      "Phoenix Kino"
-    ]
-  },
-  {
-    "name": "Глазами туриста",
-    "aliases": [
-      "Glazami Turista"
-    ]
-  },
-  {
-    "name": "Перец",
-    "aliases": [
-      "Perets",
-      "Peretz"
-    ]
-  },
-  {
-    "name": "Живая планета",
-    "aliases": [
-      "Zhivaya Planeta",
-      "Living Planet"
-    ]
-  },
-  {
-    "name": "Русский бестселлер",
-    "aliases": [
-      "Russkiy Bestseller",
-      "Russian Bestseller"
-    ]
-  },
-  {
-    "name": "Русская комедия",
-    "aliases": [
-      "Russkaya Komediya",
-      "Russian Comedy"
-    ]
-  },
-  {
-    "name": "Премиальное HD",
-    "aliases": [
-      "Premialnoe HD"
-    ]
-  },
-  {
-    "name": "Наше любимое HD",
-    "aliases": [
-      "Nashe Lyubimoe HD"
-    ]
-  },
-  {
-    "name": "Наш кинопоказ HD",
-    "aliases": [
-      "Nash Kinopokaz HD"
-    ]
-  },
-  {
-    "name": "Русский иллюзион",
-    "aliases": [
-      "Russkiy Illuzion",
-      "Russian Illusion"
-    ]
-  },
-  {
-    "name": "Мосфильм. Золотая коллекция",
-    "aliases": [
-      "Mosfilm Gold Collection",
-      "Mosfilm Zolotaya Kollektsiya"
-    ]
-  },
-  {
-    "name": "Россия 1 HD (+4)",
-    "aliases": [
-      "Russia 1 HD",
-      "Rossiya 1 HD"
-    ]
-  },
-  {
-    "name": "Россия 24",
-    "aliases": [
-      "Russia 24",
-      "Rossiya 24"
-    ]
-  },
-  {
-    "name": "Дом кино Премиум HD",
-    "aliases": [
-      "Dom Kino Premium HD"
-    ]
-  },
-  {
-    "name": "Первый канал",
-    "aliases": [
-      "Channel One",
-      "1TV",
-      "Perviy Kanal"
-    ],
-    "channel_id": "ChannelOne.ru"
-  },
-  {
-    "name": "Рен ТВ",
-    "aliases": [
-      "REN TV",
-      "Ren TV"
-    ],
-    "channel_id": "RENTV.ru"
-  },
-  {
-    "name": "ТВЦ",
-    "aliases": [
-      "TV Center",
-      "TV Centre",
-      "TVC"
-    ],
-    "channel_id": "TVCentr.ru"
-  },
-  {
-    "name": "МИР (+4)",
-    "aliases": [
-      "Mir +4",
-      "Mir TV +4"
-    ],
-    "channel_id": "Mir.ru"
-  },
-  {
-    "name": "Звезда",
-    "aliases": [
-      "Zvezda TV"
-    ],
-    "channel_id": "Zvezda.ru"
-  },
-  {
-    "name": "МУЗ ТВ",
-    "aliases": [
-      "Muz TV",
-      "MUZ-TV",
-      "MuzTV"
-    ],
-    "channel_id": "MuzTV.ru"
+{
+  "channels": [
+    "Шансон ТВ",
+    "Победа",
+    "Viasat History",
+    "Viasat Nature",
+    "TV1000 Русское кино",
+    "Родное кино",
+    "Киносерия",
+    "Наше новое кино",
+    "ТНТ4",
+    "Дом кино",
+    "Смотрим 100% Любовь",
+    "Звезда Плюс",
+    "НТВ (+4)",
+    "ТНТ",
+    "Пятница!",
+    "Пятый канал",
+    "СТС",
+    "ТВ3",
+    "Че!",
+    "Домашний",
+    "КиноСезон",
+    "Феникс+ Кино",
+    "Глазами туриста",
+    "Перец",
+    "Живая планета",
+    "Русский бестселлер",
+    "Русская комедия",
+    "Премиальное HD",
+    "Наше любимое HD",
+    "Наш кинопоказ HD",
+    "Русский иллюзион",
+    "Мосфильм. Золотая коллекция",
+    "Россия 1 HD (+4)",
+    "Россия 24",
+    "Дом кино Премиум HD",
+    "Первый канал",
+    "Рен ТВ",
+    "ТВЦ",
+    "МИР (+4)",
+    "Звезда",
+    "МУЗ ТВ"
+  ],
+  "confirmed_streams": [
+    {
+      "channel": "Победа",
+      "url": "https://streaming.thestream.cyou/live/43.m3u8"
+    },
+    {
+      "channel": "Viasat History",
+      "url": "http://178.124.179.122:8080/HistoryHD/index.m3u8"
+    },
+    {
+      "channel": "Дом кино",
+      "url": "https://streaming.thestream.cyou/live/44.m3u8"
+    },
+    {
+      "channel": "Viasat Nature",
+      "url": "https://stream8.cinerama.uz/1228/tracks-v1a1/mono.m3u8"
+    },
+    {
+      "channel": "Viasat Nature",
+      "url": "http://46.53.200.153:7777/play/a01k/index.m3u8"
+    },
+    {
+      "channel": "Наш кинопоказ HD",
+      "url": "http://46.53.200.153:7777/play/SRT_Nash_kinopokaz/index.m3u8"
+    },
+    {
+      "channel": "Россия 24",
+      "url": "http://176.118.197.101/Rossiya24/index.m3u8"
+    },
+    {
+      "channel": "Родное кино",
+      "url": "https://stream8.cinerama.uz/1052/index.m3u8"
+    },
+    {
+      "channel": "Наше новое кино",
+      "url": "https://stream8.cinerama.uz/1051/index.m3u8"
+    },
+    {
+      "channel": "Русский бестселлер",
+      "url": "https://stream.mcquack.net/208/index.m3u8"
+    },
+    {
+      "channel": "МУЗ ТВ",
+      "url": "https://stream8.cinerama.uz/1200/index.m3u8"
+    }
+  ],
+  "github_sources": [
+    {
+      "type": "iptvorg",
+      "repo": "iptv-org/iptv",
+      "description": "Российские каналы и русскоязычные потоки"
+    },
+    {
+      "type": "github_repo",
+      "repo": "MaximKiselev/iptv"
+    },
+    {
+      "type": "github_repo",
+      "repo": "smolnp/IPTVru"
+    },
+    {
+      "type": "github_repo",
+      "repo": "boxer180/RUSSIA_TV"
+    },
+    {
+      "type": "github_repo",
+      "repo": "THEROCKSSS/sorted-iptv"
+    },
+    {
+      "type": "github_repo",
+      "repo": "ngrch/iptv"
+    },
+    {
+      "type": "github_repo",
+      "repo": "swoldier-rus/IP_TV"
+    },
+    {
+      "type": "github_repo",
+      "repo": "AdeelWajid/iptv_validated_list"
+    }
+  ],
+  "settings": {
+    "max_playlist_files_per_repo": 12,
+    "max_file_bytes": 12000000,
+    "request_timeout": 20,
+    "stream_timeout": 12,
+    "ffmpeg_seconds": 8,
+    "min_main_entries": 5,
+    "workers": 16
   }
-]
+}

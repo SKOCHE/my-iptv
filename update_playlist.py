@@ -1,300 +1,189 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Build IPTV playlist with explicit Barnaul (+4) regional overrides.
-A successful FFmpeg decode is NOT proof of channel identity.
+"""GitHub IPTV aggregator: discover M3U files, collect all matching variants,
+probe manifests and decode a short sample with FFmpeg. Never discard user-confirmed
+streams merely because a GitHub-hosted runner cannot reach them.
 """
-import concurrent.futures, json, os, re, shutil, subprocess, sys, time, io, unicodedata
+import concurrent.futures, json, re, subprocess, sys, time, urllib.error, urllib.parse, urllib.request
 from pathlib import Path
-from urllib.request import Request, urlopen
-from urllib.parse import urlsplit
 
-ROOT = Path(__file__).resolve().parent
-MANIFEST = ROOT / 'channels.json'
-OUT = ROOT / 'favorites.m3u'
-REPORT = ROOT / 'update_report.txt'
-EPG = ROOT / 'epg_mapping.txt'
-API = 'https://iptv-org.github.io/api'
-UA = 'Mozilla/5.0 (compatible; SKOCHE-IPTV-check/9.0)'
-BLOCKED = {'cinerama.uz', 'mcquack.net', 'linkintel.ru', 'thestream.cyou'}
-
-# Regional feeds explicitly identified as +4 relative to Moscow (Barnaul time).
-# These are candidates from published IPTV stream catalogs; FFmpeg tests availability,
-# but visual inspection in Televizo is still required to confirm channel identity.
-BARNAUL_PLUS4 = {
-    'НТВ (+4)': 'https://cdn.ntv.ru/ntv4/playlist.m3u8',
-    'Россия 1 HD (+4)': 'https://vgtrkregion-reg.cdnvideo.ru/vgtrk/barnaul/russia1-sd/index.m3u8',
-    'МИР (+4)': 'http://hls.mirtv.cdnvideo.ru/mirtv-parampublish/mirtv3_2500/playlist.m3u8',
+ROOT=Path(__file__).resolve().parent
+CFG=json.loads((ROOT/"channels.json").read_text(encoding="utf-8"))
+CHANNELS=CFG["channels"]
+SET=CFG["settings"]
+UA="Mozilla/5.0 (compatible; SKOCHE-IPTV-Aggregator/2.0)"
+TIMEOUT=int(SET.get("request_timeout",20))
+FFMPEG_SECONDS=int(SET.get("ffmpeg_seconds",8))
+REPORT=[]
+def log(s): REPORT.append(s); print(s,flush=True)
+def req(url,timeout=TIMEOUT,headers=None):
+    h={"User-Agent":UA,"Accept":"*/*"}
+    if headers: h.update(headers)
+    q=urllib.request.Request(url,headers=h)
+    with urllib.request.urlopen(q,timeout=timeout) as r:
+        return r.status,r.headers, r.read()
+def normalize(s):
+    s=s.lower().replace("ё","е")
+    s=re.sub(r"\([^)]*\)|\+\s*4\s*ч?|\+4h|красноярск"," ",s)
+    s=re.sub(r"[^a-zа-я0-9]+"," ",s)
+    return " ".join(s.split())
+ALIASES={
+ "Рен ТВ":["РЕН ТВ","REN TV"],"ТВЦ":["ТВ Центр","ТВЦ"],"ТВ3":["ТВ-3","TV3"],
+ "Че!":["Че","Че ТВ"],"Мосфильм. Золотая коллекция":["Мосфильм Золотая коллекция","Mosfilm"],
+ "Наш кинопоказ HD":["Наш кинопоказ","Кинопоказ HD"],"Россия 24":["Россия24"],
+ "Viasat History":["Viju History","Viasat History HD"],"Viasat Nature":["Viju Nature","Viasat Nature HD"],
+ "МУЗ ТВ":["МУЗ-ТВ","Muz TV","MuzTV"],"Родное кино":["РодноеКино"],
+ "Наше новое кино":["НашеНовоеКино"],"Русский бестселлер":["РусскийБестселлер"]
 }
-# Keep regional EPG identifiers distinct from the Moscow/base channel.
-REGIONAL_TVG_IDS = {
-    'НТВ (+4)': 'NTV.ru@Plus4',
-    'МИР (+4)': 'Mir.ru@Plus4',
-}
-# Regional channels must never fall back to a generic/Moscow stream.
-NO_GENERIC_STREAMS = set(BARNAUL_PLUS4)
-
-# Additional candidates collected from independent public M3U repositories.
-# They are NOT assumed working: every URL is tested by FFmpeg at run time.
-# Known-bad domains remain excluded by BLOCKED above.
-SUPPLEMENTAL_CANDIDATES = {
-    'Победа': ['http://91.197.104.34:8080/Pobeda/video.m3u8'],
-    'Родное кино': ['https://cdn-cache01.voka.tv:443/live/80.m3u8'],
-    'ТНТ4': [
-        'https://bl.uma.media/live/317849/HLS/4614144_3/2/1/playlist.m3u8',
-        'http://176.118.197.101/TNT4/index.m3u8',
-    ],
-    'Наше новое кино': ['https://cdn-cache01.voka.tv:443/live/75.m3u8'],
-    'Перец': ['http://dmi3y-tv.ru/hls/blrus/CH_PERETZ_INTERNATIONAL.m3u8'],
-    'Феникс+ Кино': ['https://tbs01-edge11.itdc.ge/fenixkino/tracks-v1a1/mono.m3u8'],
-    'Русский бестселлер': ['http://dmi3y-tv.ru/hls/CH_RUSSKIY_BESTSELLER.m3u8'],
-    'Русский иллюзион': ['https://cdn-cache01.voka.tv:443/live/616.m3u8'],
-    'Дом кино Премиум HD': ['https://tbs01-edge11.itdc.ge/domkinopremium/tracks-v1a1/mono.m3u8'],
-    'МИР (+4)': ['http://hls.mirtv.cdnvideo.ru/mirtv-parampublish/mirtv3_2500/playlist.m3u8'],
-    # Барнаул-specific VGTRK regional endpoint (SD). Keep this distinct from Moscow HD.
-    'Россия 1 HD (+4)': ['https://vgtrkregion-reg.cdnvideo.ru/vgtrk/barnaul/russia1-sd/index.m3u8'],
-    # Legacy Viasat channel names may now be branded viju; identity must be checked in Televizo.
-    'Viasat History': ['https://fs.uplink.kz/viju_history/mono.m3u8?token=onlinetv'],
-    'Viasat Nature': ['https://fs.uplink.kz/viju_nature/mono.m3u8?token=onlinetv'],
-}
-
-def norm(s):
-    s = (s or '').casefold().replace('ё', 'е')
-    s = re.sub(r'\([^)]*\)', ' ', s)
-    s = re.sub(r'[^a-zа-я0-9]+', ' ', s)
-    return ' '.join(s.split())
-
-def fetch_json(name):
-    req = Request(f'{API}/{name}.json', headers={'User-Agent': UA})
-    with urlopen(req, timeout=60) as r:
-        data = json.loads(r.read().decode('utf-8'))
-    if not isinstance(data, list):
-        raise RuntimeError(f'{name}.json returned unexpected data')
-    return data
-
-def is_blocked(url):
-    host = (urlsplit(url).hostname or '').lower()
-    return any(host == d or host.endswith('.' + d) for d in BLOCKED)
-
-def resolve_channel(item, channels, name_index):
-    explicit = item.get('channel_id')
-    if explicit and any(c.get('id') == explicit for c in channels):
-        return explicit, 'explicit channel_id'
-    canonical = norm(item['name'])
-    direct = name_index.get(canonical, set())
-    if len(direct) == 1:
-        return next(iter(direct)), 'canonical exact'
-    hits = set()
-    for alias in item.get('aliases', []):
-        hits |= name_index.get(norm(alias), set())
-    if len(hits) == 1:
-        return next(iter(hits)), 'unique alias'
-    return None, 'ambiguous/no exact ID: ' + ','.join(sorted(hits or direct))
-
-def decode_test(stream):
+def names_for(ch):
+    return {normalize(ch),*(normalize(x) for x in ALIASES.get(ch,[]))}
+def match_channel(name):
+    n=normalize(name)
+    if not n: return None
+    matches=[]
+    for ch in CHANNELS:
+        variants=names_for(ch)
+        # strict token-aware substring; fuzzy matching intentionally avoided
+        if n in variants or any(len(v)>=6 and (v in n or n in v) for v in variants):
+            matches.append(ch)
+    return matches[0] if len(matches)==1 else None
+def parse_m3u(text,source):
+    lines=[x.strip() for x in text.replace("\ufeff","").splitlines()]
+    ext=None; out=[]
+    for line in lines:
+        if line.startswith("#EXTINF"):
+            ext=line
+        elif ext and line and not line.startswith("#"):
+            if line.startswith(("http://","https://")):
+                name=ext.rsplit(",",1)[-1].strip() if "," in ext else ""
+                tvg=re.search(r'tvg-name="([^"]+)"',ext,re.I)
+                if tvg and (not name or name.lower() in ("channel","")): name=tvg.group(1)
+                out.append({"name":name,"url":line,"extinf":ext,"source":source})
+            ext=None
+    return out
+def github_tree(repo):
+    for branch in ("HEAD","main","master"):
+        url=f"https://api.github.com/repos/{repo}/git/trees/{branch}?recursive=1"
+        try:
+            status,headers,data=req(url,headers={"Accept":"application/vnd.github+json"})
+            obj=json.loads(data)
+            if "tree" in obj: return obj["tree"], branch
+        except Exception: pass
+    raise RuntimeError("GitHub tree недоступен")
+def discover_sources():
+    records=[]; stats=[]
+    # Stable curated M3U sources first
+    for u in ("https://iptv-org.github.io/iptv/countries/ru.m3u",
+              "https://iptv-org.github.io/iptv/languages/rus.m3u"):
+        try:
+            _,_,b=req(u); rec=parse_m3u(b.decode("utf-8-sig","replace"),u)
+            records.extend(rec); stats.append((u,len(rec),"OK"))
+        except Exception as e: stats.append((u,0,str(e)[:160]))
+    for source in CFG["github_sources"]:
+        repo=source["repo"]
+        try:
+            tree,branch=github_tree(repo)
+            files=[x["path"] for x in tree if x.get("type")=="blob" and
+                   x["path"].lower().endswith((".m3u",".m3u8",".txt")) and
+                   not any(k in x["path"].lower() for k in ("readme","license","changelog"))]
+            # Prefer likely playlist names, then smaller path depth. Keep scan bounded.
+            files.sort(key=lambda p:(0 if any(k in p.lower() for k in ("ru","russia","iptv","playlist","tv")) else 1,p.count("/"),len(p)))
+            count=0
+            for path in files[:int(SET["max_playlist_files_per_repo"])]:
+                raw=f"https://raw.githubusercontent.com/{repo}/{branch}/{urllib.parse.quote(path)}"
+                try:
+                    _,_,b=req(raw)
+                    if len(b)>int(SET["max_file_bytes"]) or b"\x00" in b[:1000]: continue
+                    txt=b.decode("utf-8-sig","replace")
+                    if "#EXTM3U" not in txt[:500]: continue
+                    rec=parse_m3u(txt,f"{repo}/{path}")
+                    if rec: records.extend(rec); count+=len(rec)
+                except Exception: continue
+            stats.append((repo,count,"OK" if count else "no M3U read"))
+        except Exception as e: stats.append((repo,0,str(e)[:160]))
+    return records,stats
+def probe_manifest(url):
     try:
-        from PIL import Image, ImageStat
-        headers = [f"User-Agent: {stream.get('user_agent') or UA}"]
-        if stream.get('referrer'):
-            headers.append('Referer: ' + stream['referrer'])
-        cmd = ['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-rw_timeout','12000000',
-               '-headers','\r\n'.join(headers)+'\r\n','-i',stream['url'],'-t','10',
-               '-vf','fps=1,scale=160:90','-frames:v','6','-f','image2pipe','-vcodec','mjpeg','-']
-        p = subprocess.run(cmd, capture_output=True, timeout=20)
-        if p.returncode or not p.stdout:
-            detail = (p.stderr.decode('utf-8', 'replace').strip().splitlines() or ['no video output'])[-1]
-            return False, ('FFmpeg: ' + detail)[:180]
-        b, pos, frames = p.stdout, 0, []
-        while True:
-            a = b.find(b'\xff\xd8', pos)
-            if a < 0: break
-            z = b.find(b'\xff\xd9', a + 2)
-            if z < 0: break
-            try:
-                im = Image.open(io.BytesIO(b[a:z+2])).convert('RGB')
-                st = ImageStat.Stat(im)
-                mean = st.mean
-                green = mean[1] > mean[0]*1.35 and mean[1] > mean[2]*1.25
-                variance = sum(st.var)/3
-                frames.append((variance, green))
-            except Exception:
-                pass
-            pos = z + 2
-        good = [x for x in frames if x[0] > 18 and not x[1]]
-        if len(good) < 2:
-            return False, f'flat/black/green or insufficient frames ({len(frames)} frames)'
-        return True, f'{len(frames)} frames decoded; {len(good)} non-flat'
-    except subprocess.TimeoutExpired:
-        return False, 'decode timeout'
-    except Exception as e:
-        return False, str(e)[:160]
-
+        status,headers,b=req(url,timeout=int(SET["stream_timeout"]),headers={"Range":"bytes=0-4095"})
+        if status not in (200,206) or not b: return False,"HTTP/empty"
+        # HLS manifest is text; TS/fMP4 streams can be binary and still valid
+        if b.lstrip().startswith(b"#EXTM3U"): return True,"HLS manifest"
+        c=(headers.get("Content-Type") or "").lower()
+        if any(x in c for x in ("video/","octet-stream","mpegurl")): return True,"media response"
+        return False,"not HLS/media"
+    except Exception as e: return False,str(e)[:100]
+def decode(url):
+    if not shutil_which("ffmpeg"): return False,"FFmpeg отсутствует"
+    cmd=["ffmpeg","-nostdin","-v","error","-rw_timeout","12000000","-i",url,"-t",str(FFMPEG_SECONDS),"-map","0:v:0?","-frames:v","3","-f","null","-"]
+    try:
+        p=subprocess.run(cmd,capture_output=True,text=True,timeout=int(SET["stream_timeout"])+FFMPEG_SECONDS+5)
+        if p.returncode==0: return True,"FFmpeg decode OK"
+        return False,(p.stderr.strip().splitlines()[-1][:160] if p.stderr.strip() else "decode failed")
+    except Exception as e: return False,str(e)[:140]
+def shutil_which(x):
+    import shutil
+    return shutil.which(x)
+def write_m3u(path,items):
+    with path.open("w",encoding="utf-8",newline="\n") as f:
+        f.write("#EXTM3U\n")
+        for ch,url,src,status in items:
+            f.write(f'#EXTINF:-1 tvg-name="{ch}" group-title="IPTV",{ch} [{status}]\n{url}\n')
 def main():
-    if not MANIFEST.is_file():
-        raise RuntimeError('channels.json is missing')
-    if not shutil.which('ffmpeg'):
-        raise RuntimeError('FFmpeg is missing')
-    try:
-        from PIL import Image  # noqa: F401
-    except Exception:
-        raise RuntimeError('Pillow is missing')
-
-    wanted = json.loads(MANIFEST.read_text(encoding='utf-8'))
-    if len(wanted) != 41:
-        raise RuntimeError(f'Expected 41 manifest entries, got {len(wanted)}')
-
-    channels = fetch_json('channels')
-    feeds = fetch_json('feeds')
-    streams = fetch_json('streams')
-    guides = fetch_json('guides')
-    byid = {c['id']: c for c in channels}
-    feedmap = {(f.get('channel'), f.get('id')): f for f in feeds}
-    name_index = {}
-    for c in channels:
-        for n in [c.get('name', '')] + (c.get('alt_names') or []):
-            if n:
-                name_index.setdefault(norm(n), set()).add(c['id'])
-
-    report = [
-        'IPTV v13 regional-source and diagnostics report',
-        'UTC: ' + time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()),
-        'IMPORTANT: FFmpeg decode confirms video availability, NOT channel identity.',
-        'Regional target: Barnaul, Moscow time +4.',
-        'NTV +4, Russia 1 Barnaul, and MIR +4 are explicit regional candidates.',
-        'Expanded supplemental M3U candidates are tested; decode does not prove channel identity.',
-        'Previously reported bad domains excluded: ' + ', '.join(sorted(BLOCKED)), ''
-    ]
-    epg_lines = ['# name | tvg-id | XMLTV source URLs (if listed)']
-    output = ['#EXTM3U']
-    used = set()
-    passed = 0
-    placeholders = 0
-
-    def add_unavailable(item, cid, reason):
-        nonlocal placeholders
-        name = item['name']
-        slug = unicodedata.normalize('NFKD', name).encode('ascii', 'ignore').decode('ascii')
-        slug = re.sub(r'[^A-Za-z0-9]+', '-', slug).strip('-').lower() or f'channel-{placeholders+1}'
-        # .invalid is a reserved non-working domain: no unrelated stream is substituted.
-        placeholder_url = f'https://example.invalid/iptv-unavailable/{slug}.m3u8'
-        tvg_id = cid or ''
-        output.append(f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{name}" group-title="Нет потока",{name} [НЕТ ПОТОКА]')
-        output.append(placeholder_url)
-        placeholders += 1
-        report.append(f'PLACEHOLDER / NO VERIFIED STREAM | {name} | id={cid or "unknown"} | {reason}')
-
-    for item in wanted:
-        name = item['name']
-        is_regional = name in BARNAUL_PLUS4
-
-        # CRITICAL FIX: regional channels are processed BEFORE catalog ID lookup.
-        # This fixes Russia 1 HD (+4), which has no channel_id in channels.json.
-        if is_regional:
-            regional_url = BARNAUL_PLUS4[name]
-            candidates = []
-            if regional_url not in used:
-                candidates = [(100, {'url': regional_url, 'user_agent': UA}, {'source': 'explicit regional public playlist'})]
-            else:
-                report.append(f'DUPLICATE REGIONAL URL | {name} | {regional_url}')
-                epg_lines.append(f'{name} | | regional URL duplicated')
-                add_unavailable(item, item.get('channel_id'), 'duplicate regional URL')
-                continue
-            cid, match, ch = item.get('channel_id'), 'explicit Barnaul +4 URL', {}
+    log("=== SKOCHE IPTV Aggregator v2 ===")
+    records,stats=discover_sources()
+    for u,n,s in stats: log(f"SOURCE | {u} | records={n} | {s}")
+    log(f"TOTAL SOURCE RECORDS: {len(records)}")
+    # Keep all exact name matches and every variant URL, not just one per channel.
+    candidates={}
+    for rec in records:
+        ch=match_channel(rec["name"])
+        if ch: candidates.setdefault((ch,rec["url"]),rec)
+    # User-confirmed links are pinned and never auto-removed by a remote probe.
+    pinned={(x["channel"],x["url"]):{"source":"USER_CONFIRMED"} for x in CFG["confirmed_streams"]}
+    for k,v in pinned.items(): candidates[k]=v
+    log(f"MATCHED UNIQUE CANDIDATES: {len(candidates)}")
+    items=list(candidates.items())
+    results={}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=int(SET["workers"])) as ex:
+        fut={ex.submit(probe_manifest,k[1]):k for k,_ in items if k not in pinned}
+        for f in concurrent.futures.as_completed(fut):
+            k=fut[f]
+            try: results[k]=f.result()
+            except Exception as e: results[k]=(False,str(e)[:100])
+    test=[]; main_entries=[]; summary={c:[] for c in CHANNELS}
+    for (ch,url),rec in items:
+        if (ch,url) in pinned:
+            status="USER_CONFIRMED"; ok=True; src="user-confirmed"
         else:
-            cid, match = resolve_channel(item, channels, name_index)
-            ch = byid.get(cid, {}) if cid else {}
-            candidates = []
-            # Add independent M3U candidates first, even when iptv-org has no unambiguous ID.
-            # This widens discovery beyond exact catalog matching.
-            for extra_url in SUPPLEMENTAL_CANDIDATES.get(name, []):
-                if extra_url not in used and not is_blocked(extra_url):
-                    candidates.append((30, {'url': extra_url, 'user_agent': UA}, {'source': 'supplemental public M3U'}))
-            stream_source = [] if name in NO_GENERIC_STREAMS else streams
-            if cid:
-                for st in stream_source:
-                    if st.get('channel') != cid:
-                        continue
-                    url = (st.get('url') or '').strip()
-                    if not url.startswith(('https://', 'http://')) or url in used or is_blocked(url):
-                        continue
-                    labels = set(st.get('labels') or [])
-                    if labels & {'Geo-blocked', 'Not 24/7'}:
-                        continue
-                    feed = feedmap.get((cid, st.get('feed')), {})
-                    langs = set(feed.get('languages') or [])
-                    areas = set(feed.get('broadcast_area') or [])
-                    if langs and 'rus' not in langs and ch.get('country') != 'RU':
-                        continue
-                    score = (8 if 'rus' in langs else 0) + (5 if {'c/RU', 'r/RU'} & areas else 0)
-                    score += 2 if feed.get('is_main') else 0
-                    score += 1 if url.startswith('https://') else 0
-                    candidates.append((score, st, feed))
-            elif not candidates:
-                report.append(f'NO CHANNEL ID | {name} | {match}; no supplemental URL')
-                epg_lines.append(f'{name} | | no channel ID / no guide')
-                add_unavailable(item, None, match)
-                continue
-
-        candidates.sort(key=lambda x: x[0], reverse=True)
-        reasons = []
-        accepted = None
-        for _, st, feed in candidates[:12]:
-            ok, reason = decode_test(st)
+            ok,detail=results.get((ch,url),(False,"not checked"))
+            status="HTTP_OK" if ok else "HTTP_FAIL"; src=rec["source"]
             if ok:
-                accepted = (st, feed, reason)
-                break
-            reasons.append(reason)
-
-        if not accepted:
-            report.append(
-                f'NO DECODED STREAM | {name} | id={cid or "regional override"} | '
-                f'match={match} | candidates={len(candidates)} | '
-                f'{"; ".join(reasons[:4]) or "no eligible stream"}'
-            )
-            epg_lines.append(f'{name} | {cid or ""} | guide not verified')
-            add_unavailable(item, cid, 'no stream passed decode/identity filter')
-            continue
-
-        st, feed, reason = accepted
-        url = st['url']
-        used.add(url)
-        passed += 1
-        tvg_id = REGIONAL_TVG_IDS.get(name, cid or '')
-        output.append(f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{name}" group-title="IPTV",{name}')
-        output.append(url)
-        status = 'BARNAUL +4 CANDIDATE / IDENTITY UNCONFIRMED' if is_regional or name in {'МИР (+4)', 'Россия 1 HD (+4)'} else 'DECODE OK / IDENTITY UNCONFIRMED'
-        report.append(f'{status} | {name} | id={cid or "supplemental"} | match={match} | source={feed.get('source', "iptv-org")} | {reason} | {url}')
-
-        guide_urls = []
-        if cid:
-            for g in guides:
-                if g.get('channel') == cid and (not g.get('feed') or g.get('feed') == feed.get('id')):
-                    guide_urls += [s['url'] for s in (g.get('sources') or []) if s.get('url')]
-        epg_lines.append(f'{name} | {tvg_id} | ' + ('; '.join(dict.fromkeys(guide_urls)) or 'EPG source not verified'))
-
-    report += [
-        '',
-        f'SUMMARY: playable_candidates={passed}/41; placeholders={placeholders}; total_playlist_entries={passed+placeholders}/41',
-        'A PLACEHOLDER is visible in Televizo but cannot play; it is not a working stream.',
-        'Regional +4 URLs are candidates; verify broadcast identity/time in Televizo.',
-        'MIR (+4) uses only the published Mir +4 candidate; verify regional time in Televizo.',
-        'Never treat DECODE OK as visual confirmation of the named channel.'
-    ]
-    REPORT.write_text('\n'.join(report) + '\n', encoding='utf-8')
-    EPG.write_text('\n'.join(epg_lines) + '\n', encoding='utf-8')
-
-    if len(output) != 1 + 2 * len(wanted):
-        raise RuntimeError(f'Playlist entry count mismatch: expected {len(wanted)}, got {(len(output)-1)//2}')
-    tmp = OUT.with_suffix('.m3u.tmp')
-    tmp.write_text('\n'.join(output) + '\n', encoding='utf-8')
-    tmp.replace(OUT)
-    print(
-        f'Updated favorites.m3u: {passed} playable candidates + {placeholders} visible placeholders = {passed+placeholders}/41 entries. '
-        'Placeholders do not play; channel identity and regional time require visual confirmation.'
-    )
-
-if __name__ == '__main__':
-    try: main()
-    except Exception as e:
-        print('FATAL:', e, file=sys.stderr)
-        sys.exit(1)
-
+                # Decode check is stronger than a manifest response; still not identity proof.
+                dec,why=decode(url)
+                status="FFMPEG_OK" if dec else "HTTP_ONLY"
+                detail=why
+            log(f"CANDIDATE | {ch} | {status} | {src} | {url}")
+        summary[ch].append(status)
+        if ok:
+            test.append((ch,url,src,status))
+            # Main is safe: pinned or FFmpeg-decoded only. HTTP-only entries stay test-only.
+            if status in ("USER_CONFIRMED","FFMPEG_OK"): main_entries.append((ch,url,src,status))
+    # Sort by configured channel order, keep all good variants in test file.
+    order={c:i for i,c in enumerate(CHANNELS)}
+    test.sort(key=lambda x:(order[x[0]],x[3],x[2]))
+    main_entries.sort(key=lambda x:(order[x[0]],x[3]))
+    write_m3u(ROOT/"test_candidates.m3u",test)
+    # Never replace a healthy previous main playlist with an empty/short result.
+    if len(main_entries)>=int(SET["min_main_entries"]):
+        write_m3u(ROOT/"favorites.m3u",main_entries)
+        log(f"MAIN UPDATED: {len(main_entries)} entries")
+    else:
+        log(f"MAIN PRESERVED: only {len(main_entries)} safe entries")
+    missing=[c for c in CHANNELS if not summary[c]]
+    http_only=[c for c,vals in summary.items() if "HTTP_ONLY" in vals and "FFMPEG_OK" not in vals]
+    log(f"CHANNELS WITH CANDIDATES: {len(CHANNELS)-len(missing)}/{len(CHANNELS)}")
+    log("NO CANDIDATE: "+", ".join(missing))
+    log("HTTP-ONLY (needs Televizo check): "+", ".join(http_only))
+    (ROOT/"update_report.txt").write_text("\n".join(REPORT)+"\n",encoding="utf-8")
+    return 0
+if __name__=="__main__": sys.exit(main())

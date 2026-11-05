@@ -1,7 +1,20 @@
-# SKOCHE IPTV playlist
+# SKOCHE IPTV Aggregator v2
 
-Автоматическая сборка M3U для Televizo на Android TV.
+## Что делает
+- Загружает русские M3U источники iptv-org.
+- Обходит деревья заданных GitHub-репозиториев и ищет M3U/M3U8/TXT плейлисты.
+- Извлекает все ссылки, совпадающие с 41 каналом, а не только первую.
+- Проверяет HTTP/M3U ответ, затем коротко декодирует FFmpeg.
+- Сохраняет все доступные варианты в `test_candidates.m3u`.
+- В `favorites.m3u` кладёт только вручную подтверждённые ссылки и варианты, которые FFmpeg декодировал.
+- Никогда не удаляет вручную подтверждённые потоки из-за недоступности из GitHub Actions.
+- Пишет подробный `update_report.txt`.
 
-Инструкции по установке и ограничения проверки — в [README_RU.txt](README_RU.txt).
+## Ручной запуск
+`python3 validate_config.py && python3 update_playlist.py`
 
-Плейлист: `https://raw.githubusercontent.com/SKOCHE/my-iptv/main/favorites.m3u`
+## Важные ограничения
+GitHub Actions и Ростелеком — разные сети. `HTTP_FAIL`/таймаут в Actions не доказывает, что поток не работает у пользователя. `FFMPEG_OK` доказывает декодирование видеокадров, но не подтверждает, что это именно канал с указанным названием. Поэтому `test_candidates.m3u` — полный файл для проверки в Televizo; `favorites.m3u` — консервативный основной список.
+
+## Ветка и workflow
+Положить содержимое архива в корень `SKOCHE/my-iptv`, заменив `update_playlist.py`, `validate_config.py`, `channels.json`, `.github/workflows/auto_update.yml`. Существующий `favorites.m3u` не удалять. Запустить Actions вручную.
