@@ -145,7 +145,9 @@ def write_m3u(path,items):
         for ch,url,src,status in items:
             f.write(f'#EXTINF:-1 tvg-name="{ch}" group-title="IPTV",{ch} [{status}]\n{url}\n')
 def main():
-    log("=== SKOCHE IPTV Aggregator v2 ===")
+    log("=== SKOCHE IPTV Aggregator v2.1 SAFE PUBLISH ===")
+    log("PUBLISH RULE: favorites.m3u contains USER_CONFIRMED links only.")
+    log("FFMPEG_OK and HTTP-only links are candidates, never auto-published as confirmed channels.")
     records,stats=discover_sources()
     for u,n,s in stats: log(f"SOURCE | {u} | records={n} | {s}")
     log(f"TOTAL SOURCE RECORDS: {len(records)}")
@@ -224,21 +226,25 @@ def main():
         log(f"CANDIDATE | {ch} | {status} | {src} | {detail} | {url}")
         if ok:
             test.append((ch,url,src,status))
-            if status in ("USER_CONFIRMED","FFMPEG_OK"):
+            # Only links personally confirmed in Televizo may enter favorites.m3u.
+            # FFmpeg decode proves that video can be decoded on GitHub's runner,
+            # but it does not prove channel identity or playback via the user's ISP.
+            if status == "USER_CONFIRMED":
                 main_entries.append((ch,url,src,status))
 
     order={c:i for i,c in enumerate(CHANNELS)}
     test.sort(key=lambda x:(order[x[0]],x[3],x[2],x[1]))
     main_entries.sort(key=lambda x:(order[x[0]],x[3]))
     write_m3u(ROOT/"test_candidates.m3u",test)
-    if len(main_entries)>=int(SET["min_main_entries"]):
-        write_m3u(ROOT/"favorites.m3u",main_entries)
-        log(f"MAIN UPDATED: {len(main_entries)} entries")
-    else:
-        log(f"MAIN PRESERVED: only {len(main_entries)} safe entries")
+    # favorites.m3u is a stable user playlist, not an automated candidate list.
+    # Always regenerate it exclusively from the user's confirmed_streams.
+    write_m3u(ROOT/"favorites.m3u",main_entries)
+    log(f"MAIN UPDATED: {len(main_entries)} USER-CONFIRMED entries only")
     missing=[c for c in CHANNELS if not summary[c]]
     http_only=[c for c,vals in summary.items() if any(v in ("HTTP_ONLY","HTTP_OK_NOT_DECODED") for v in vals) and "FFMPEG_OK" not in vals]
-    log(f"HTTP CANDIDATES: {len(test)}")
+    log(f"USER-CONFIRMED MAIN ENTRIES: {len(main_entries)}")
+    log(f"AUTOMATIC CANDIDATES FOR MANUAL TEST ONLY: {len(test) - len(main_entries)}")
+    log(f"HTTP CANDIDATES (including user-confirmed): {len(test)}")
     log(f"FFMPEG DECODE TARGETS: {len(decode_targets)} (max 3 per channel)")
     log(f"FFMPEG DECODE OK: {sum(decoded_per_channel.values())}")
     log(f"CHANNELS WITH CANDIDATES: {len(CHANNELS)-len(missing)}/{len(CHANNELS)}")

@@ -1,3 +1,5 @@
+PATCH NOTE: This is the previous run report from the uploaded archive. It is retained for reference and is NOT the result of the patched script. Run GitHub Actions to generate a fresh report.
+
 === SKOCHE IPTV Aggregator v2 ===
 SOURCE | https://iptv-org.github.io/iptv/countries/ru.m3u | records=23 | OK
 SOURCE | https://iptv-org.github.io/iptv/languages/rus.m3u | records=22 | OK
